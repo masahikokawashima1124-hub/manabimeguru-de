@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manabimeguru | Ein bisschen üben, einen Geist kennenlernen.</title>
+<meta name="description" content="Lern-App für Grundschulkinder. Matheaufgaben lösen und dabei Sammelkarten von Jahreszeiten-Geistern bekommen. Kostenloses Konto (nur E-Mail-Adresse), keine Installation, direkt im Browser.">
+
+<!-- SNS-Vorschau (og:image/twitter:image). ⚠️ TODO: Es gibt noch kein assets/og-card-de.png
+     (tools/make-og-image.py unterstützt bisher nur --locale es, siehe es-handoff.md).
+     Bis das Bild erzeugt ist, lassen wir og:image/twitter:image bewusst weg, statt fälschlich
+     auf ein nicht existierendes oder falsches (japanisches/spanisches) Bild zu verlinken.
+     Auch og:url ist ein Platzhalter: Es gibt noch keine feste Domain/kein Hosting-Pfad für
+     die deutsche Version (kein deutsches Firmen-/Impressum-Setup, siehe unten). Vor Veröffentlichung
+     unbedingt beides nachtragen. -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Manabimeguru | Ein bisschen üben, einen Geist kennenlernen.">
+<meta property="og:description" content="Lern-App für Grundschulkinder. Matheaufgaben lösen und dabei Sammelkarten von Jahreszeiten-Geistern bekommen.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Manabimeguru | Ein bisschen üben, einen Geist kennenlernen.">
+<meta name="twitter:description" content="Lern-App für Grundschulkinder. Matheaufgaben lösen und dabei Sammelkarten von Jahreszeiten-Geistern bekommen.">
+
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lp.css?v=13">
+</head>
+<body>
+
+<!-- ① ヒーロー -->
+<header class="hero">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="wrap">
+    <!-- ⚠️ スペイン語版にならい、ヒーローにキャラクター画像は置かない。
+         ファーストビューの面積は見出しと判断材料に使う（lp-es.html・lp-plan.mdと同じ設計）。
+
+         見出しは「時間がない」のスペイン語版と同じ具体統計は使わない：
+         あの数字（「約半数の家庭が時間不足」）はスペイン語圏の一次調査であり、
+         ドイツ語圏に同じ数字を転用するのは事実の捏造になる（de-market-research.md には
+         対応する裏付け統計がまだ無い）。代わりに、裏付けが取れているドイツの事実
+         （補習市場の規模の大きさ＝「多くの家庭がすでに追加の学習サポートにお金を
+         払っている」＝一次資料つき）を根拠に、同じ「毎日はそばにいられない」という
+         悩みを言葉にしている。 -->
+    <p class="hero-target">Für Eltern von Grundschulkindern</p>
+    <h1>Ich kann nicht<br>jeden Nachmittag <span class="accent">dabei</span> sein.</h1>
+    <p class="hero-sub">
+      <span>Viele Familien greifen deshalb schon früh auf Nachhilfe zurück –</span>
+      <span>mit echtem Geld und echter Zeit.</span>
+      <span>Es geht nicht darum, noch mehr Stunden danebenzusitzen,</span>
+      <span>sondern darum, dass es auch ohne dich weiterläuft.</span>
+    </p>
+    <!-- 「どう解けるのか」の一行。間隔反復（REVIEW_INTERVALS = [1,3,7,20]）そのもの。
+         スペイン語版と同じく、ここが唯一ヒーローでアプリ名を出す場所。 -->
+    <p class="hero-mechanism">
+      Manabimeguru zeigt falsch gelöste Aufgaben noch einmal –<br>
+      <b>am nächsten Tag</b> → <b>nach 3 Tagen</b> → <b>nach einer Woche</b> → <b>nach 20 Tagen</b>.
+    </p>
+    <a class="cta-btn" href="index.html" data-cta="hero">Jetzt ausprobieren <span class="arrow">→</span></a>
+    <p class="cta-micro">Kostenloses Konto, keine Installation. Läuft direkt im Browser.</p>
+    <!-- 空いた面積は判断材料で埋める。プライバシー訴求はドイツ語圏で特に重要
+         （de-market-research.md §4：DSGVO同意年齢16歳・プライバシー意識が高い文化圏） -->
+    <ul class="hero-proof">
+      <li>Keine Werbung</li>
+      <li>Kinder werden nie zum Bezahlen aufgefordert</li>
+      <li>Keine persönlichen Daten der Kinder</li>
+    </ul>
+  </div>
+</header>
+
+<main>
+
+  <!-- ⚠️ 並びは lp-es.html と同じ新PASONAの型。lp-plan.md §「並びはPASONAの型に組み直した」が根拠。
+       Agitation（不安をあおる）は使わない。N も作り話の希少性を足さない。
+
+         P  Problem   … ヒーロー
+         （型の外）   … #what で「これは何か」を3秒で返す
+         A  Affinity  … #maker。専門家ではなく同じ小学生の親という立ち位置
+         S  Solution  … #review → #why → #pace → #trust（反論処理）
+         O  Offer     … #family → #pricing
+         N  Narrowing … いまは価格自体が未定のため、早期据え置きの文言は書かない（後述）
+         A  Action    … #faq → #start → 最後のCTA
+
+       ⚠️ #start（はじめかた）は lp-es.html にあり、ドイツ語版でも同じ位置に踏襲。 -->
+
+  <!-- 型の外 ─ これは何か -->
+  <section id="what" aria-labelledby="what-h">
+    <div class="wrap">
+      <h2 id="what-h" class="visually-hidden">Was ist das</h2>
+      <ul class="fact-list">
+        <!--
+          ⚠️ 対象学年の書き方について（TODO・要ユーザー判断）：
+          de-market-research.md §5・§7「論点②」のとおり、ドイツ語圏では初等教育の年数が
+          国・州によって4年制（ドイツの大半の州・オーストリア）〜6年制（スイス、
+          ベルリン/ブランデンブルク）とバラバラで、日本の小1〜6年をどう学年表記に
+          対応づけるかはまだユーザーの判断待ち（未決定）。
+          スペイン語版はスペイン・メキシコとも「1º〜6º de Primaria」で一致したため
+          そのまま書けたが、ドイツ語版で同じように「1.〜6. Klasse」と書くと、
+          4年制のGrundschuleを前提にする家庭には「5・6年生はもう対象外なのでは」と
+          誤解される可能性がある。そのため、ここでは学年の数字を出さず
+          「Grundschulkinder（就学期の子ども）」という言い方にとどめている。
+          論点②が解決したら、ここと #pace 節の学年表記を具体化すること。
+        -->
+        <li><span class="k">Für wen</span> Grundschulkinder</li>
+        <li><span class="k">Fächer</span> Mathematik und Englisch</li>
+        <li><span class="k">Wie es funktioniert</span> Öffnet sich direkt im Browser. Keine App-Installation nötig</li>
+        <li><span class="k">Geräte</span> Tablet, Smartphone oder Computer</li>
+        <li><span class="k">Zum Einstieg</span> Eine erwachsene Person legt ein kostenloses Konto an (nur E-Mail-Adresse) – so bleibt der Fortschritt erhalten, und jedes Kind hat sein eigenes Profil</li>
+      </ul>
+      <p class="fact-note">
+        Nach Angabe der Klassenstufe richten sich die Aufgaben nach diesem Niveau,
+        gemischt mit Wiederholungen aus der vorherigen Stufe.
+        Neue Aufgabentypen kommen im Laufe des Schuljahrs nach und nach dazu.
+      </p>
+    </div>
+  </section>
+
+  <!-- A（Affinity）─ 作り手 -->
+  <section id="maker" aria-labelledby="maker-h">
+    <div class="wrap maker">
+      <img class="maker-figure" src="assets/characters/hanabi-think.webp" width="150" height="170"
+           loading="lazy" alt="Geist Hanabi denkt nach, Kopf schräg gelegt">
+      <div>
+        <span class="eyebrow">Wer dahintersteckt</span>
+        <h2 id="maker-h">Ich habe damit<br>für meine Tochter angefangen.</h2>
+      </div>
+      <p>
+        Ich bin kein Pädagoge. Ich bin ein Vater mit einer Tochter im Grundschulalter.
+        Ich habe angefangen, mir zu überlegen, wie sie von sich aus lernen würde,
+        und verbessere die App bis heute weiter, während sie sie täglich nutzt.
+      </p>
+      <p>Eine fachliche Prüfung durch ein großes Verlagshaus gibt es noch nicht. Stattdessen:</p>
+      <ul class="fact-list fact-list--plain">
+        <li><strong>Mathematik</strong> ist nach Lernstoff gestaffelt und erscheint im Laufe des Schuljahrs Schritt für Schritt</li>
+        <li><strong>Englisch</strong> beginnt mit einfachem Wortschatz und kurzen Sätzen</li>
+        <li>Die Aufgaben werden laufend überprüft, gefundene Fehler direkt korrigiert</li>
+        <li>Wenn ein Kind an etwas hängen bleibt, schreiben wir die Aufgabe oder den Hinweistext um</li>
+      </ul>
+      <p>Was noch fehlt, kommt nach und nach dazu.</p>
+    </div>
+  </section>
+
+  <!-- S（Solution）先頭 ─ 復習 -->
+  <section id="review" aria-labelledby="review-h">
+    <div class="wrap family-box">
+      <span class="eyebrow">Wenn etwas falsch war</span>
+      <h2 id="review-h">Fehler kommen genau dann zurück,<br>wenn man sie sonst vergessen würde.</h2>
+      <p class="section-lead">
+        Eine falsch gelöste Aufgabe macht an dem Tag selbst kein Problem.
+        Das Problem kommt später, wenn genau dieser Punkt die Grundlage für das Nächste ist.
+      </p>
+      <p>
+        Falsch gelöste Aufgaben erscheinen erneut
+        <strong>am nächsten Tag, nach 3 Tagen, nach 7 und nach 20 Tagen</strong>,
+        mit wachsendem Abstand. Sich an etwas zu erinnern, kurz bevor man es vergisst,
+        prägt sich am besten ein. Nach vier richtigen Antworten in Folge gilt die Aufgabe als abgeschlossen.
+      </p>
+      <p>
+        Die Wiederholung ist kein eigener Modus, sondern mischt sich unter die gewohnten 10 Aufgaben.
+        Dein Kind merkt gar nicht, dass gerade „wiederholt" wird.
+      </p>
+      <p class="family-note">
+        Die App korrigiert selbst und merkt sich auch, was wann wiederholt werden muss.
+        <strong>Du musst weder kontrollieren noch die Wiederholung selbst organisieren.</strong>
+        Was schwerfällt, lässt sich jederzeit in einer Liste einsehen.
+      </p>
+    </div>
+  </section>
+
+  <!-- S（Solution）② ─ なぜ続くのか -->
+  <section id="why" aria-labelledby="why-h">
+    <div class="wrap">
+      <span class="eyebrow">So funktioniert es</span>
+      <h2 id="why-h">„Noch eine Aufgabe" passiert von allein.</h2>
+      <div class="loop">
+        <span class="step">Aufgabe lösen</span><span class="arrow">→</span>
+        <span class="step">Punkte sammeln</span><span class="arrow">→</span>
+        <span class="step">Kartenpäckchen öffnen</span><span class="arrow">→</span>
+        <span class="step">Album füllt sich</span>
+      </div>
+
+      <div class="card-strip" role="list" aria-label="Einige Geister-Sammelkarten">
+        <img role="listitem" class="r-N" loading="lazy" width="220" height="294" src="assets/cards-de/n1.webp" alt="Sammelkarte: Funkenkobold">
+        <img role="listitem" class="r-N" loading="lazy" width="220" height="294" src="assets/cards-de/n2.webp" alt="Sammelkarte: Blubberchen">
+        <img role="listitem" class="r-N" loading="lazy" width="220" height="294" src="assets/cards-de/n3.webp" alt="Sammelkarte: Marktspatz">
+        <img role="listitem" class="r-N" loading="lazy" width="220" height="294" src="assets/cards-de/n4.webp" alt="Sammelkarte: Hirschkäferchen">
+        <img role="listitem" class="r-N" loading="lazy" width="220" height="294" src="assets/cards-de/n5.webp" alt="Sammelkarte: Eisstückchen">
+        <img role="listitem" class="r-N" loading="lazy" width="220" height="294" src="assets/cards-de/n6.webp" alt="Sammelkarte: Wunderkerzenfünkchen">
+        <img role="listitem" class="r-N" loading="lazy" width="220" height="294" src="assets/cards-de/n7.webp" alt="Sammelkarte: Schwimmotter">
+        <img role="listitem" class="r-N" loading="lazy" width="220" height="294" src="assets/cards-de/n8.webp" alt="Sammelkarte: Goldfischchen">
+        <img role="listitem" class="r-R" loading="lazy" width="220" height="294" src="assets/cards-de/r1.webp" alt="Sammelkarte: Herr des großen BUMM">
+        <img role="listitem" class="r-R" loading="lazy" width="220" height="294" src="assets/cards-de/r2.webp" alt="Sammelkarte: Geist der Gezeiten">
+        <img role="listitem" class="r-R" loading="lazy" width="220" height="294" src="assets/cards-de/r3.webp" alt="Sammelkarte: Trommeljunge">
+        <img role="listitem" class="r-R" loading="lazy" width="220" height="294" src="assets/cards-de/r4.webp" alt="Sammelkarte: Käferkapitän">
+        <img role="listitem" class="r-R" loading="lazy" width="220" height="294" src="assets/cards-de/r5.webp" alt="Sammelkarte: Eisstielgeist">
+        <img role="listitem" class="r-R" loading="lazy" width="220" height="294" src="assets/cards-de/r6.webp" alt="Sammelkarte: Glühwürmchenlicht">
+        <img role="listitem" class="r-SR" loading="lazy" width="220" height="294" src="assets/cards-de/sr1.webp" alt="Sammelkarte: Regenbogenfeuerwerk">
+        <img role="listitem" class="r-SR" loading="lazy" width="220" height="294" src="assets/cards-de/sr2.webp" alt="Sammelkarte: Herr der Tiefsee">
+        <img role="listitem" class="r-SR" loading="lazy" width="220" height="294" src="assets/cards-de/sr3.webp" alt="Sammelkarte: Sommerfest-Tänzerin">
+        <img role="listitem" class="r-SR" loading="lazy" width="220" height="294" src="assets/cards-de/sr4.webp" alt="Sammelkarte: Eisprinzessin">
+        <img role="listitem" class="r-UR" loading="lazy" width="220" height="294" src="assets/cards-de/ur1.webp" alt="Sammelkarte: Feuerschriftdrache">
+        <img role="listitem" class="r-UR" loading="lazy" width="220" height="294" src="assets/cards-de/ur2.webp" alt="Sammelkarte: König der Sommerhimmel-Geister">
+      </div>
+
+      <p style="text-align:center; font-size:13.5px; color:var(--text-muted); margin:-10px 0 24px;">
+        Insgesamt gibt es 40 Karten. Los geht es mit den Sommergeistern,
+        weitere Jahreszeiten kommen nach und nach dazu.<br>
+        Mit dem kostenlosen Plan sind 28 davon erreichbar – so gestaltet, dass sie mit der Zeit
+        von selbst zusammenkommen, wenn weitergespielt wird.
+      </p>
+
+      <p class="statement">
+        Wir versprechen keine besseren Noten.<br>
+        <span class="muted">Aber vielleicht musst du seltener „Setz dich jetzt zum Lernen hin" sagen.</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- S（Solution）② ─ 学年の中の進み方 -->
+  <section id="pace" aria-labelledby="pace-h">
+    <div class="wrap family-box">
+      <span class="eyebrow">Das Niveau passt sich von selbst an</span>
+      <h2 id="pace-h">Ein Kind, das im September in die 1. Klasse kommt,<br>ist im Juni woanders als eines, das gerade erst gestartet ist.</h2>
+      <p>
+        Auch wenn beide „in der 1. Klasse" sind: Zwischen Schuljahresbeginn und -ende
+        liegt fast ein ganzes Jahr Unterschied im Lernstoff.
+      </p>
+      <p>
+        Manabimeguru schaut nicht nur auf die Klassenstufe, sondern <strong>auf den Monat im Schuljahr</strong>.
+        In der 1. Klasse zum Beispiel starten die Aufgaben mit dem Addieren, und sobald in der Schule
+        das Subtrahieren dran ist, tauchen auch entsprechende Aufgaben auf.
+      </p>
+      <p class="family-note">
+        Es müssen nur zwei Dinge angegeben werden: die Klassenstufe und der Monat, in dem das Schuljahr beginnt.
+        Danach passt sich alles automatisch an das Datum an – <strong>ihr müsst das Niveau nicht ständig selbst nachjustieren.</strong>
+        Der Startmonat lässt sich auch anders einstellen, falls die Schule einem anderen Kalender folgt.
+      </p>
+    </div>
+  </section>
+
+  <!-- S（Solution）締め ─ 信頼ブロック。反論処理
+       ⚠️ ドイツ語圏向けに特に丁寧に書いている：BzKJ（連邦青少年メディア保護センター）が
+       ルートボックス/ガチャ的な仕組みを「ギャンブルに近く子どもに有害」として問題視している
+       （de-market-research.md §1）。そのため lp-es.html 以上に踏み込み、
+       「Gacha」という語自体を一度も使わず、「勉強のポイントでしか開けない・お金では買えない」
+       という事実を最初に、単独で言い切っている。 -->
+  <section id="trust" class="trust" aria-labelledby="trust-h">
+    <div class="wrap">
+      <span class="eyebrow">Ein wichtiger Punkt</span>
+      <h2 id="trust-h">Es gibt Kartenpäckchen –<br>aber sie werden nicht mit Geld gekauft.</h2>
+      <p class="trust-lead">
+        Die Karten kommen aus „Päckchen". Wir wissen, dass dieses Wort bei vielen Familien
+        sofort Vorsicht auslöst – zu Recht, angesichts der Debatten um Lootboxen in Spielen.
+      </p>
+      <div class="trust-core">
+        <p>In Manabimeguru lassen sich Päckchen ausschließlich mit Punkten öffnen, die man sich durch Lernen erspielt.</p>
+        <p>Sie lassen sich nicht mit Geld kaufen: Diese Option gibt es in der App schlicht nicht.</p>
+      </div>
+      <ul class="check-list">
+        <li>Kindern wird kein Bildschirm gezeigt, der zum Bezahlen auffordert</li>
+        <li>Keine Werbung</li>
+        <li>Keine persönlichen Daten von Kindern (nur ein Spitzname und die Klassenstufe – kein echter Name, kein Geburtsdatum, keine E-Mail-Adresse)</li>
+        <li>Konto und jede Zahlung werden ausschließlich über das Konto der erwachsenen Person verwaltet</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- O（Offer）先頭 ─ 家族での利用。人数は script.js の PROFILE_MAX = 6 -->
+  <section id="family" aria-labelledby="family-h">
+    <div class="wrap family-box">
+      <span class="eyebrow">Für die ganze Familie</span>
+      <h2 id="family-h">Egal wie viele Geschwister –<br>der Preis bleibt gleich.</h2>
+      <p>
+        Mit einem einzigen Abo lassen sich <strong>bis zu 6 Kinder</strong> anlegen.
+        Jedes hat sein eigenes Album, und Klassenstufe sowie Punkte werden getrennt gespeichert.
+      </p>
+      <p>
+        Außerdem gibt es ein <strong>Familienalbum</strong>, in dem alle Karten der ganzen Familie
+        gemeinsam zu sehen sind.
+      </p>
+      <p class="family-note">Es muss nicht für jedes Kind ein eigenes Tablet angeschafft werden.</p>
+    </div>
+  </section>
+
+  <!-- O（Offer）本体 ─ 料金。
+       ⚠️ TODO（要ユーザー判断・要Stripe設定）：script.js の STRIPE_PAYMENT_LINKS_BY_LOCALE
+       hat noch keinen "de"-Eintrag – es gibt also noch keinen echten Preis in Euro und kein
+       fertiges deutsches Geschäfts-/Steuer-Setup (VAT/Managed Payments, siehe account-design.md §9-3).
+       Statt eine Zahl zu erfinden, zeigen wir hier "In Kürze verfügbar" – genau wie es
+       lp-es.html vor der Preisentscheidung getan hat (es-handoff.md, Stand vor 2026-08-13).
+       Sobald ein echter Preis feststeht: Preistabelle wie in lp-es.html ergänzen, und dort
+       auch den N-Baustein (Preis-Lock für Frühregistrierte) nachtragen. -->
+  <section id="pricing" aria-labelledby="pricing-h">
+    <div class="wrap">
+      <span class="eyebrow">Preis</span>
+      <h2 id="pricing-h">Der gesamte Lernstoff ist kostenlos.</h2>
+      <p class="price-intro">
+        <strong>Alle Lerninhalte lassen sich kostenlos nutzen.</strong><br>
+        Ein Familienplan mit Profilen für mehr Kinder, den restlichen Karten
+        und dem Familienalbum ist in Vorbereitung.
+      </p>
+
+      <p class="price-freenote">
+        Die kostenlose Nutzung <strong>lässt sich ganz ohne Konto starten.</strong>
+        Wenn daraus eine Gewohnheit wird, könnt ihr ein (ebenfalls kostenloses) Konto anlegen.
+        Karten und Fortschritt werden dann in der Cloud gespeichert, und gehen so
+        <strong>nicht verloren, wenn das Gerät gewechselt oder der Browser-Speicher geleert wird.</strong>
+      </p>
+
+      <div class="table-scroll">
+        <table class="price-table">
+          <thead>
+            <tr><th scope="col"></th><th scope="col">Kostenlos</th><th scope="col">Familie</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Mathematik und Englisch (alle Klassenstufen)</th><td class="yes">Ja</td><td class="yes">Ja</td></tr>
+            <tr><th scope="row">Cloud-Speicherung<br><span class="price-sub">(Konto erforderlich)</span></th><td class="yes">Ja</td><td class="yes">Ja</td></tr>
+            <tr><th scope="row">Kinderprofile</th><td>1</td><td class="yes">Bis zu 6</td></tr>
+            <tr><th scope="row">Geister-Sammelkarten</th><td>28</td><td class="yes">Alle 40 und weitere</td></tr>
+            <tr><th scope="row">Familienalbum</th><td>—</td><td class="yes">Ja</td></tr>
+            <tr><th scope="row">Preis</th><td class="plan-price">Kostenlos</td><td class="plan-price">In Kürze verfügbar</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="price-lock">
+        Kartenpäckchen lassen sich nicht mit Geld kaufen: Sie werden ausschließlich durch Lernen freigespielt.
+      </p>
+    </div>
+  </section>
+
+  <!-- A（Action）への地ならし ─ よくある質問 -->
+  <section id="faq" aria-labelledby="faq-h">
+    <div class="wrap">
+      <span class="eyebrow">Häufige Fragen</span>
+      <h2 id="faq-h">Häufige Fragen</h2>
+      <div class="faq-list">
+
+        <details class="faq-item">
+          <summary>Spielt mein Kind am Ende nur, statt zu lernen?</summary>
+          <p>Karten gibt es ausschließlich für Punkte, die durch gelöste Aufgaben verdient werden. Der Sammelteil lässt sich nicht isoliert „bespielen".</p>
+        </details>
+
+        <details class="faq-item">
+          <summary>Braucht man ein Tablet?</summary>
+          <p>Nein. Die App läuft im Browser des vorhandenen Tablets, Smartphones oder Computers. Eine Installation ist nicht nötig.</p>
+        </details>
+
+        <details class="faq-item">
+          <summary>Muss ich die Klassenstufe oft anpassen?</summary>
+          <p>Nein. Es reicht, zu Beginn die Klassenstufe und den Monat des Schuljahresbeginns einmal einzustellen. Danach erscheinen neue Aufgabentypen automatisch passend zum Datum. Der Startmonat lässt sich auch abweichend einstellen, falls die Schule einem anderen Kalender folgt.</p>
+        </details>
+
+        <details class="faq-item">
+          <summary>Gibt es Werbung?</summary>
+          <p>Nein.</p>
+        </details>
+
+        <details class="faq-item">
+          <summary>Müssen persönliche Daten des Kindes angegeben werden?</summary>
+          <p>Nein. Von jedem Kind wird nur ein Spitzname und die Klassenstufe gespeichert. Weder echter Name noch Geburtsdatum noch E-Mail-Adresse werden abgefragt.</p>
+        </details>
+
+        <details class="faq-item">
+          <summary>Geht bei einem Gerätewechsel alles verloren?</summary>
+          <p><strong>Nein.</strong> Ab dem Anlegen des (kostenlosen) Kontos werden Karten und Fortschritt automatisch in der Cloud gespeichert – auf dem neuen Gerät reicht die Anmeldung mit demselben Konto, um weiterzuspielen.</p>
+        </details>
+
+        <details class="faq-item">
+          <summary>Gibt es die App auch auf Japanisch oder Spanisch?</summary>
+          <p>Ja. Die japanische Version enthält zusätzlich Japanisch als Fach und liegt unter einer anderen Adresse. Die spanische Version hat wie die deutsche Mathematik und Englisch.</p>
+        </details>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- A（Action）─ はじめかた。2026-09-23よりアカウント登録が必須になったため、
+       ①を「登録なしで試す」から「無料のアカウント登録」に差し替えた（保護者のメールのみ）。 -->
+  <section id="start" aria-labelledby="start-h">
+    <div class="wrap">
+      <span class="eyebrow">So geht's los</span>
+      <h2 id="start-h">In 3 Schritten<br>noch heute starten.</h2>
+
+      <ol class="start-flow">
+        <li class="start-step">
+          <span class="start-num" aria-hidden="true">1</span>
+          <div class="start-body">
+            <h3>Kostenloses Konto anlegen</h3>
+            <p>Nur die E-Mail-Adresse einer erwachsenen Person. Daten des Kindes werden nicht abgefragt.</p>
+          </div>
+        </li>
+        <li class="start-step">
+          <span class="start-num" aria-hidden="true">2</span>
+          <div class="start-body">
+            <h3>Einen Namen eingeben</h3>
+            <p>Nur der Name, mit dem gespielt werden soll. Die Klassenstufe lässt sich später ändern.</p>
+          </div>
+        </li>
+        <li class="start-step">
+          <span class="start-num" aria-hidden="true">3</span>
+          <div class="start-body">
+            <h3>Aufgaben lösen</h3>
+            <p>10 Aufgaben pro Runde. Jede richtige Antwort gibt 1 Punkt, mit 10 Punkten öffnet sich ein Kartenpäckchen.</p>
+          </div>
+        </li>
+      </ol>
+
+      <p class="fact-note">
+        Ab dem Anlegen des Kontos werden Karten und Fortschritt automatisch in der Cloud gespeichert.
+        Bei einem Gerätewechsel reicht die Anmeldung mit demselben Konto, um weiterzuspielen.
+      </p>
+
+      <div class="cta-row">
+        <a class="cta-btn" href="index.html" data-cta="start">Bei 1 anfangen <span class="arrow">→</span></a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- A（Action）─ 最後のCTA -->
+<section class="closing" aria-labelledby="closing-h">
+  <div class="wrap">
+    <img class="closing-figure" src="assets/characters/hanabi-happy.webp" width="150" height="170"
+         loading="lazy" alt="Geist Hanabi lächelt">
+    <h2 id="closing-h">Probiert es einen Moment lang aus.</h2>
+    <p class="hero-sub" style="color:var(--text-muted); max-width:34ch;">Nur ein kostenloses Konto. Keine Installation nötig.</p>
+    <a class="cta-btn" href="index.html" data-cta="closing">Jetzt ausprobieren <span class="arrow">→</span></a>
+  </div>
+</section>
+
+<!-- ⚠️ TODO（要ユーザー判断）：フッタに法的表示（Impressum）へのリンクが無い。
+     日本語版の tokusho.html（特定商取引法の表示）は日本の法律に基づくもので、
+     ドイツ語版にそのまま使えない。ドイツでテレメディエンゲゼッツ/DSGVOに基づく
+     Impressumを出すには、確定した事業者情報（会社名・住所・代表者名等）が要る。
+     script.js の hasLegalPage() は現状 "ja" のみを true にしており、
+     この構造はスペイン語版と同じく踏襲できる（ドイツ語版で法的ページを作るまでは
+     リンクを出さない）。無料アプリとして出す間は大きな問題にならないはずだが、
+     ドイツで課金を始める前には必ず用意すること。 -->
+<footer>
+  <p>Manabimeguru</p>
+</footer>
+
+<!-- アクセス計測（Firebase Analytics）。日本語版・スペイン語版と同じ作り -->
+<script src="vendor/firebase-app-compat.js"></script>
+<script src="vendor/firebase-analytics-compat.js"></script>
+<script src="lp-analytics.js"></script>
+
+<script>
+  // CTAクリックの計測。window.trackEvent は lp-analytics.js が定義する。
+  document.querySelectorAll('[data-cta]').forEach(function (el) {
+    el.addEventListener('click', function () {
+      if (typeof window.trackEvent === 'function') {
+        window.trackEvent('cta_click', { position: el.dataset.cta });
+      }
+    });
+  });
+</script>
+
+</body>
+</html>
