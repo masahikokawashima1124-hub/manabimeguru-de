@@ -81,6 +81,7 @@ const LOCALES = {
     "resume.text": "とちゅうの {subject}が あるよ（{current}／{total}もんめ）",
     "resume.continue": "つづきから やる",
     "resume.discard": "やめておく",
+    "resume.overwriteConfirm": "とちゅうの {subject}（{current}／{total}もんめ）が きえるけど、あたらしく はじめる？",
     "review.remove": "この項目を削除",
     "review.removeConfirm": "「{name}」を一覧から削除します。もう一度まちがえたときは、あらためて復習に入ります。よろしいですか？",
 
@@ -106,9 +107,16 @@ const LOCALES = {
     // --- プロフィール ---
     "profile.selectTitle": "だれが あそぶ？",
     "profile.selectSub": "じぶんの なまえを えらんでね",
+    "profile.manageTitle": "どれを けす？",
+    "profile.manageSub": "けす なまえを えらんでね。きろくも ぜんぶ きえます",
+    "profile.renameListTitle": "どれの なまえを かえる？",
+    "profile.renameListSub": "なまえを かえる ひとを えらんでね",
+    "profile.gradeLabel": "がくねんを えらんでね",
     "profile.createTitle": "あたらしく つくる",
     "profile.createSub": "なまえを おしえてね",
-    "profile.createNew": "＋ あたらしく つくる",
+    "profile.createNew": "あたらしく つくる",
+    "profile.addLocked": "ふやせるのは プレミアムプラン",
+    "profile.addFull": "{n}人まで つくれます",
     "profile.nameLabel": "なまえ",
     "profile.createOk": "つくる",
     "profile.nameRequired": "なまえを いれてね",
@@ -413,9 +421,19 @@ const LOCALES = {
       "どのれべるに ちょうせんする？",
       "まいにち すこしずつ がんばろうね！",
     ],
+    // ⚠️ 科目の顔ぶれはロケールと学年で変わる（国語は日本語版だけ、英語は3年から）。
+    //    セリフに科目名を焼き込むと必ずズレるので、名前は {a}{b}{c} で受け取る。
     "guide.subject": [
-      "さんすう と こくご、どっちにする？",
       "とくいなほうから やってみよう！",
+      "すきなものから えらんでね！",
+    ],
+    "guide.subjectTwo": [
+      "{a} と {b}、どっちにする？",
+      "とくいなほうから やってみよう！",
+    ],
+    "guide.subjectThree": [
+      "{a}・{b}・{c}、どれに ちょうせんする？",
+      "とくいなものから やってみよう！",
     ],
     "guide.category": [
       "どのもんだいに ちょうせんする？",
@@ -814,6 +832,7 @@ const LOCALES = {
     "resume.text": "Tienes {subject} a medias (pregunta {current} de {total})",
     "resume.continue": "Seguir",
     "resume.discard": "Descartar",
+    "resume.overwriteConfirm": "Perderás {subject} a medias (pregunta {current} de {total}). ¿Quieres empezar de nuevo?",
     "review.remove": "Quitar de la lista",
     "review.removeConfirm": "Se quitará «{name}» de la lista. Si vuelve a fallar esta pregunta, entrará otra vez en el repaso. ¿Continuar?",
 
@@ -839,9 +858,16 @@ const LOCALES = {
     // --- プロフィール ---
     "profile.selectTitle": "¿Quién va a jugar?",
     "profile.selectSub": "Elige tu nombre",
+    "profile.manageTitle": "¿Cuál quieres borrar?",
+    "profile.manageSub": "Elige el perfil que quieres borrar. Se borran también sus datos",
+    "profile.renameListTitle": "¿A cuál le cambias el nombre?",
+    "profile.renameListSub": "Elige el perfil que quieres renombrar",
+    "profile.gradeLabel": "Elige el curso",
     "profile.createTitle": "Crear un perfil nuevo",
     "profile.createSub": "¿Cómo te llamas?",
-    "profile.createNew": "＋ Crear un perfil nuevo",
+    "profile.createNew": "Crear un perfil nuevo",
+    "profile.addLocked": "Añadir perfiles es del plan Premium",
+    "profile.addFull": "Puedes crear hasta {n}",
     "profile.nameLabel": "Nombre",
     "profile.createOk": "Crear",
     "profile.nameRequired": "Escribe tu nombre",
@@ -1160,7 +1186,15 @@ const LOCALES = {
       "¡Un poquito cada día y llegarás lejos!",
     ],
     "guide.subject": [
-      "¿Matemáticas o inglés?",
+      "¡Empieza por lo que más te guste!",
+      "¡Elige lo que más te apetezca!",
+    ],
+    "guide.subjectTwo": [
+      "¿{a} o {b}?",
+      "¡Empieza por lo que más te guste!",
+    ],
+    "guide.subjectThree": [
+      "{a}, {b} o {c}: ¿qué eliges?",
       "¡Empieza por lo que más te guste!",
     ],
     "guide.category": [
@@ -1548,6 +1582,7 @@ const LOCALES = {
     "resume.text": "Du hast {subject} noch nicht fertig (Frage {current} von {total})",
     "resume.continue": "Weitermachen",
     "resume.discard": "Verwerfen",
+    "resume.overwriteConfirm": "{subject} (Frage {current} von {total}) geht dabei verloren. Möchtest du neu anfangen?",
     "review.remove": "Diesen Eintrag entfernen",
     "review.removeConfirm": "„{name}“ wird aus der Liste entfernt. Bei erneutem Fehler kommt die Frage wieder in die Wiederholung. Fortfahren?",
 
@@ -1573,9 +1608,16 @@ const LOCALES = {
     // --- プロフィール ---
     "profile.selectTitle": "Wer spielt?",
     "profile.selectSub": "Wähle deinen Namen",
+    "profile.manageTitle": "Welches Profil löschen?",
+    "profile.manageSub": "Wähle das Profil, das gelöscht werden soll. Die Daten gehen mit",
+    "profile.renameListTitle": "Welches Profil umbenennen?",
+    "profile.renameListSub": "Wähle das Profil, das einen neuen Namen bekommt",
+    "profile.gradeLabel": "Wähle die Klassenstufe",
     "profile.createTitle": "Neu anlegen",
     "profile.createSub": "Wie heißt du?",
-    "profile.createNew": "＋ Neu anlegen",
+    "profile.createNew": "Neu anlegen",
+    "profile.addLocked": "Weitere Profile gibt es im Premium-Tarif",
+    "profile.addFull": "Bis zu {n} Profile möglich",
     "profile.nameLabel": "Name",
     "profile.createOk": "Anlegen",
     "profile.nameRequired": "Gib deinen Namen ein",
@@ -1881,7 +1923,15 @@ const LOCALES = {
       "Jeden Tag ein bisschen – dann klappt's bestimmt!",
     ],
     "guide.subject": [
-      "Mathe oder Deutsch – was möchtest du machen?",
+      "Fang mit dem an, was dir am meisten liegt!",
+      "Such dir aus, worauf du Lust hast!",
+    ],
+    "guide.subjectTwo": [
+      "{a} oder {b} – was möchtest du machen?",
+      "Fang mit dem an, was dir am meisten liegt!",
+    ],
+    "guide.subjectThree": [
+      "{a}, {b} oder {c} – was möchtest du machen?",
       "Fang mit dem an, was dir am meisten liegt!",
     ],
     "guide.category": [
@@ -2036,8 +2086,8 @@ const LOCALES = {
     "math.wordSubDiff1.text": "{nameA} hat {a} {item}, {nameB} hat {b}. Wie groß ist der Unterschied?",
     "math.wordSubDiff1.hint": "Bei der Frage nach dem „Unterschied“ ziehst du die kleinere von der größeren Zahl ab.",
     "math.wordSubDiff1.explain": "{a}−{b}={diff}. {nameA} hat {diff} mehr.",
-    "math.wordAddSub1.text": "Es waren {a} {item} da. {b} kamen dazu, und danach {past} {c2}. Wie viele bleiben übrig?",
-    "math.wordAddSub1.hint": "Addiere zuerst die dazugekommene Menge, ziehe danach die {plain} Menge ab.",
+    "math.wordAddSub1.text": "Es waren {a} {item} da. {b} kamen dazu, und danach wurden {c2} davon {plain}. Wie viele bleiben übrig?",
+    "math.wordAddSub1.hint": "Addiere zuerst die dazugekommene Menge und ziehe danach die abgegangene Menge ab.",
     "math.wordAddSub1.explain": "{a}+{b}={sum}. Danach {c2} {plain}: {sum}−{c2}={rest}.",
     "math.wordLength2.textAdd": "Ein blaues Band ist {a} cm lang, ein rotes Band {b} cm. Wie lang sind sie zusammen?",
     "math.wordLength2.hintAdd": "Die Gesamtlänge bekommst du, wenn du die Längen der beiden Bänder addierst.",
@@ -2076,7 +2126,7 @@ const LOCALES = {
     "math.wordUnit4.text": "Ein Band ist {total} cm lang. Wie viel m und cm sind das? (Schreib nur die cm auf: {m} m ◯ cm)",
     "math.wordUnit4.hint": "100 cm = 1 m. Denk an den Rest bei der Division durch 100.",
     "math.wordUnit4.explain": "{total} cm = {m} m {cm} cm ({m}-mal 100 cm, Rest {cm} cm)",
-    "math.wordBigNumber4.text": "{what} von {place} beträgt {base} {unit} {amount}. Der Nachbar-{place} hat das {times}-Fache. Wie viel {unit} {amount} hat der Nachbar-{place}? (Schreib die Zahl ohne „{unit}“ auf)",
+    "math.wordBigNumber4.text": "{what} von {place} A beträgt {base} {unit} {amount}. {place} B hat das {times}-Fache. Wie viel {unit} {amount} hat {place} B? (Schreib die Zahl ohne „{unit}“ auf)",
     "math.wordBigNumber4.hint": "Überlege, wie oft {unit} vorkommt. Rechne {base} × {times}.",
     "math.wordBigNumber4.explain": "{base} {unit} mal {times} ist {base}×{times}={total}. Also {total} {unit} {amount}",
     "math.wordEstimate4.text": "In einem Geschäft waren am Montag {a} Personen und am Dienstag {b} Personen. Runde beide Zahlen auf {label} und berechne, wie viele Personen es an den beiden Tagen ungefähr insgesamt waren.",
@@ -2088,7 +2138,7 @@ const LOCALES = {
     "math.wordDivLarge4.textFull": "{total} Bälle werden in Kisten gepackt, {perBox} pro Kiste. Wie viele Kisten werden ganz voll?",
     "math.wordDivLarge4.hintFull": "Der Quotient von {total}÷{perBox} ist die Anzahl der vollen Kisten.",
     "math.wordDivLarge4.explainFull": "{total}÷{perBox}={boxes} Rest {rest}. {boxes} Kisten werden voll, {rest} bleiben übrig.",
-    "math.wordAreaRoom4.textSide": "{place} hat eine Fläche von {area} m². Bei einer Länge von {h} m, wie breit ist es?",
+    "math.wordAreaRoom4.textSide": "{place} hat eine Fläche von {area} m². Bei einer Länge von {h} m, wie groß ist die Breite?",
     "math.wordAreaRoom4.hintSide": "Fläche ÷ Länge = Breite. Das ist die Umkehrung der Multiplikation.",
     "math.wordAreaRoom4.explainSide": "{area}÷{h}={w} (m)",
     "math.wordAreaRoom4.textArea": "{place} ist {h} m lang und {w} m breit. Wie groß ist die Fläche in m²?",
@@ -2100,8 +2150,8 @@ const LOCALES = {
     "math.wordDecimalAmount4.textSub": "Es waren {a} {unit} {name} vorhanden. {b} {unit} wurden verbraucht. Wie viel {unit} bleiben übrig?",
     "math.wordDecimalAmount4.hintSub": "Richte die Kommas untereinander aus und subtrahiere",
     "math.wordDecimalAmount4.explainSub": "{a}−{b}={diff} ({unit})",
-    "math.wordProportion4.text": "{n1} {unit} {name} haben {word} von {first} {amount}. Wie viel {amount} haben {n2} {unit} desselben {name}?",
-    "math.wordProportion4.hint": "Berechne zuerst {word} für 1 {unit}.",
+    "math.wordProportion4.text": "{n1} {unit} {name} haben {word} von {first} {amount}. Wie viel {amount} haben {n2} {unit} davon?",
+    "math.wordProportion4.hint": "Berechne zuerst, wie viel {amount} auf 1 {unit} kommen.",
     "math.wordProportion4.explain": "1 {unit} ist {first}÷{n1}={per} {amount}. Für {n2} {unit}: {per}×{n2}={total} {amount}.",
 
     // --- 算数の生成器（5・6年） ---
@@ -2126,7 +2176,7 @@ const LOCALES = {
     "math.triangleArea5.text": "Ein Dreieck hat eine Grundseite von {base} cm und eine Höhe von {height} cm. Wie groß ist die Fläche in cm²?",
     "math.triangleArea5.hint": "Fläche des Dreiecks = Grundseite × Höhe ÷ 2",
     "math.triangleArea5.explain": "{base} × {height} ÷ 2 = {area} (cm²)",
-    "math.wordPerUnit5.text": "{units} {unit} {item} haben {label} {total} {per}. Wie viel {per} sind es pro {unit}?",
+    "math.wordPerUnit5.text": "{units} {unit} {item} haben {label} {total} {per}. Wie viel {per} sind es pro {unitSg}?",
     "math.wordPerUnit5.hint": "Menge pro Einheit = Gesamtmenge ÷ Anzahl der Einheiten",
     "math.wordPerUnit5.explain": "{total} ÷ {units} = {perUnit} ({per})",
     "math.wordMultiple5.textBus": "Vom Bahnhof fährt Bus A alle {a} Minuten, Bus B alle {b} Minuten. Wenn beide gerade gleichzeitig losgefahren sind, in wie vielen Minuten fahren sie wieder gleichzeitig los?",
@@ -2739,10 +2789,16 @@ function t(key, params) {
 }
 
 // ガイドのセリフのように、候補が配列になっているものを取り出す
-function tList(key) {
+function tList(key, params) {
   const dict = LOCALES[getLocale()] || LOCALES[DEFAULT_LOCALE];
   const list = dict[key] !== undefined ? dict[key] : LOCALES[DEFAULT_LOCALE][key];
-  return Array.isArray(list) ? list : [];
+  if (!Array.isArray(list)) return [];
+  if (!params) return list;
+  return list.map((line) =>
+    String(line).replace(/\{(\w+)\}/g, (m, name) =>
+      params[name] !== undefined ? params[name] : m
+    )
+  );
 }
 
 // data-i18n 属性のついた要素にまとめて文言を流し込む

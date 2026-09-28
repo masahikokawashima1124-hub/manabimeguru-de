@@ -358,6 +358,9 @@ const REPEAT_STAMP_RATIO = 0.5;
 // 音のON/OFFと言語は端末ごとの設定なので、プロフィールでは分けない。
 const PROFILES_KEY = "profiles";
 const ACTIVE_PROFILE_KEY = "active_profile";
+// 一度でもログイン（または新規登録）まで到達したことがあるか。
+// **最初の画面をログインにするか新規登録にするか**の判断にだけ使う。
+const AUTH_SEEN_KEY = "auth_seen";
 const PROFILE_NAME_MAX = 8;
 const PROFILE_MAX = 6;
 
@@ -548,8 +551,13 @@ function currentSchoolMonth(now) {
 // 学年を変えても引き継げるよう、ポイントとカードは学年で分けずに1つにまとめる。
 const STORAGE_KEY = "stamps_total";
 
+// 壊れた値（数でない・負・NaN）は0として読む。
+// ⚠️ ここを素の parseInt にしておくと、いったんNaNが入ると spendStamps が
+// Math.max(0, NaN - 10) = NaN を書き戻すだけで**自己修復せず、ガチャが無料で回り続ける**。
+// getGrade/getSchoolYearStart と同じく、読むときに必ず妥当性を見る。
 function getTotalStamps() {
-  return parseInt(localStorage.getItem(pk(STORAGE_KEY)) || "0", 10);
+  const v = parseInt(localStorage.getItem(pk(STORAGE_KEY)) || "0", 10);
+  return Number.isFinite(v) && v >= 0 ? v : 0;
 }
 
 function addStamps(count) {
@@ -579,7 +587,7 @@ function dayKey(date) {
 function getDailyPoints() {
   try {
     const parsed = JSON.parse(localStorage.getItem(pk(DAILY_POINTS_KEY)) || "{}");
-    return parsed && typeof parsed === "object" ? parsed : {};
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch {
     return {};
   }
@@ -638,17 +646,26 @@ function fractionToText(f) {
   return `${f.num}/${f.den}`;
 }
 
+// ⚠️ 分数も同じ。parseInt は `4abc` を 4 と読んでしまうので、
+//    **整数そのものかどうかを正規表現で確かめてから**数にする
+//    （`3/4abc` が正解になっていた。2026-09-21 日次QAで発見）。
+const INTEGER_ONLY = /^-?\d+$/;
+
 function parseFractionInput(str) {
   // 全角スラッシュ・全角数字も受理する（タブレットのかな入力だと全角で入るため）
   str = toHalfWidth(str).trim().replace(/／/g, "/");
   if (str.includes("/")) {
-    const [n, d] = str.split("/").map((s) => parseInt(s.trim(), 10));
-    if (Number.isFinite(n) && Number.isFinite(d) && d !== 0) return reduceFraction(n, d);
-    return null;
+    const parts = str.split("/");
+    if (parts.length !== 2) return null;
+    const [rawN, rawD] = parts.map((part) => part.trim());
+    if (!INTEGER_ONLY.test(rawN) || !INTEGER_ONLY.test(rawD)) return null;
+    const n = parseInt(rawN, 10);
+    const d = parseInt(rawD, 10);
+    if (d === 0) return null;
+    return reduceFraction(n, d);
   }
-  const n = parseInt(str, 10);
-  if (!Number.isFinite(n)) return null;
-  return { num: n, den: 1 };
+  if (!INTEGER_ONLY.test(str)) return null;
+  return { num: parseInt(str, 10), den: 1 };
 }
 
 // ===== 効果音（Web Audio APIで合成、音声ファイル不要） =====
@@ -1343,7 +1360,8 @@ const PITY_KEY = "gacha_pity";
 const DUPLICATE_REFUND = { N: 3, R: 4, SR: 6, UR: 8 };
 
 function getPity() {
-  return parseInt(localStorage.getItem(pk(PITY_KEY)) || "0", 10);
+  const v = parseInt(localStorage.getItem(pk(PITY_KEY)) || "0", 10);
+  return Number.isFinite(v) && v >= 0 ? v : 0;
 }
 
 // 引きたい季節を選べるようにする（2026-09-16 ユーザー決定）。
@@ -1404,8 +1422,19 @@ function drawGachaCard() {
   const unowned = pool.filter((c) => !owned[c.id]);
   const pityHit = getPity() >= PITY_LIMIT && unowned.length > 0;
 
-  // 天井に達していたら未所持のみから、そうでなければ通常のレアリティ抽選から選ぶ
-  const card = pityHit ? pick(unowned) : pick(pool.filter((c) => c.rarity === rollRarity()));
+  // 天井に達していたら未所持のみから、そうでなければ通常のレアリティ抽選から選ぶ。
+  // ⚠️ **rollRarity() は filter の中で呼ばない。**中で呼ぶと
+  //    「1枚ごとに別の乱数でレアリティを振り、自分のレアリティと一致したら残す」になり、
+  //    当選確率が **重み × そのレアリティの枚数** に比例してしまう。枚数はNが多くURが少ないので、
+  //    **URが設計の約1/3、SRが約6割しか出ていなかった**（2026-09-22 日次QAで実測して発見。
+  //    プレミアムで実測 N68.6/R24.9/SR5.8/UR0.71% ← 設計は 60/28/10/2%）。
+  //    さらに、全部のカードが自分の抽選に外れると空配列になり、pick() が undefined を返して落ちる
+  //    （確率は極小だが起こりうる）。**1回だけ引いて、そのレアリティから選ぶ。**
+  const rarity = rollRarity();
+  const ofRarity = pool.filter((c) => c.rarity === rarity);
+  // 選んだ季節にそのレアリティが1枚も無い場合の保険（いまの構成では起きないが、
+  // 季節やロケールを足したときに静かに落ちないように）
+  const card = pityHit ? pick(unowned) : pick(ofRarity.length ? ofRarity : pool);
 
   const isNew = !owned[card.id];
   owned[card.id] = (owned[card.id] || 0) + 1;
@@ -1771,11 +1800,12 @@ document.querySelectorAll("#collection-scope .collection-scope-btn").forEach((bt
 // ===== ガイドキャラのセリフ =====
 
 // 場面名を渡すと、その場面のセリフをランダムに選び、表情もあわせて切り替える
-function setGuide(mood) {
-  const lines = tList(`guide.${mood}`);
+// mood … セリフの取り出し元（guide.<mood>）。poseAs を渡すと、立ち絵だけそちらの気分にする。
+function setGuide(mood, vars, poseAs) {
+  const lines = tList(`guide.${mood}`, vars);
   if (lines.length) document.getElementById("guide-bubble").textContent = pick(lines);
 
-  const pose = GUIDE_MOOD_POSE[mood] || "greet";
+  const pose = GUIDE_MOOD_POSE[poseAs || mood] || "greet";
   const img = document.getElementById("guide-character-img");
   if (!img) return;
   const src = GUIDE_CHARACTER.poses[pose];
@@ -1988,9 +2018,12 @@ function randNonMultipleOf10(min, max) {
 // 小数の表示をロケールに合わせる（スペイン語の学校では小数点にカンマを使う）。
 // checkAnswer() は既にカンマ入力を許容しているので、表示側もここで揃える。
 // 内部で比較に使う answer 文字列（ピリオド区切り）自体は変えず、画面に出す直前だけ通す。
+// 小数点はロケールで変わる。スペイン語もドイツ語もコンマ（3,8）。
+// ⚠️ 受理側（parseLocaleNumber）はコンマ・ピリオドの両方を読むので、表示だけ合わせればよい。
+const DECIMAL_COMMA_LOCALES = ["es", "de"];
 function fmtDecimal(n) {
   const s = String(n);
-  return getLocale() === "es" ? s.replace(".", ",") : s;
+  return DECIMAL_COMMA_LOCALES.includes(getLocale()) ? s.replace(".", ",") : s;
 }
 
 function genDecimal3() {
@@ -2162,6 +2195,66 @@ const MATH_WORDS = {
       { unit: "cajas", unitSg: "caja", item: "lápices", per: "céntimos", label: "un precio" },
     ],
     colors: ["rojo", "azul", "amarillo", "verde", "morado", "naranja", "rosa", "celeste"],
+  },
+  // de … ドイツ語には助数詞が無いので counter は空、howMany も文型に出てこない。
+  //      代わりに**格と性**が効くので、次の3点を守ること。
+  //        ① 文頭に来る語（areaPlaces）は冠詞つき・大文字で持つ
+  //        ② 「pro …」に置く単位は単数形が要るので unitSg を必ず書く
+  //        ③ 品物は**複数形**で持つ（"Es waren 5 Äpfel da."）
+  de: {
+    names: ["Jonas", "Lena", "Felix", "Mia", "Paul", "Emma"],
+    items: [
+      { w: "Äpfel", counter: "", howMany: "Wie viele", edible: true },
+      { w: "Mandarinen", counter: "", howMany: "Wie viele", edible: true },
+      { w: "Bonbons", counter: "", howMany: "Wie viele", edible: true },
+      { w: "Kekse", counter: "", howMany: "Wie viele", edible: true },
+      { w: "Bleistifte", counter: "", howMany: "Wie viele", edible: false },
+      { w: "Aufkleber", counter: "", howMany: "Wie viele", edible: false },
+      { w: "Murmeln", counter: "", howMany: "Wie viele", edible: false },
+      { w: "Eicheln", counter: "", howMany: "Wie viele", edible: false },
+    ],
+    places: ["in der Schachtel", "auf dem Tisch", "im Korb", "in der Tüte"],
+    // past は受動の定形（"5 Äpfel wurden gegessen."）、plain は分詞だけ。
+    consumed: {
+      edible: { past: "wurden gegessen", plain: "gegessen" },
+      other: { past: "wurden verbraucht", plain: "verbraucht" },
+    },
+    roundPlaces: [
+      { label: "Zehner", unit: 10, lower: "Einer" },
+      { label: "Hunderter", unit: 100, lower: "Zehner" },
+      { label: "Tausender", unit: 1000, lower: "Hunderter" },
+    ],
+    // ⚠️ 桁の区切り方はスペイン語と同じ（Tausend=10^3・Millionen=10^6）。日本語の万・億とは違う。
+    bigUnits: [
+      { label: "Tausend", what: "Die Bevölkerung", amount: "Einwohner" },
+      { label: "Millionen", what: "Das Budget", amount: "Euro" },
+    ],
+    // 「Stadt A」「Stadt B」と並べて使うので、冠詞を付けずに持つ。
+    bigPlaces: ["Stadt", "Dorf", "Gemeinde"],
+    estimatePlaces: [{ label: "Hunderter", unit: 100 }, { label: "Tausender", unit: 1000 }],
+    // 常に文頭に来るので冠詞つき・大文字で持つ。
+    areaPlaces: ["Das Klassenzimmer", "Das Blumenbeet", "Der Garten", "Der Parkplatz"],
+    amountItems: [
+      { name: "Saft", unit: "L" },
+      { name: "Wasser", unit: "L" },
+      { name: "Zucker", unit: "kg" },
+    ],
+    // word は「haben {word} von …」に入るので対格（ein Gewicht／einen Preis）。
+    proportionItems: [
+      { name: "Draht", unit: "m", amount: "g", word: "ein Gewicht", heavy: true },
+      { name: "Band", unit: "m", amount: "Cent", word: "einen Preis", heavy: false },
+    ],
+    // label は「haben {label} {total} {per}」に入るので "von" まで込みで持つ。
+    // unitSg は「pro …」に置く単数形（複数形のままだと "pro Schachteln" になる）。
+    perUnitItems: [
+      { unit: "m", unitSg: "m", item: "Band", per: "g", label: "ein Gewicht von" },
+      { unit: "kg", unitSg: "kg", item: "Bonbons", per: "Cent", label: "einen Preis von" },
+      { unit: "L", unitSg: "L", item: "Farbe", per: "m²", label: "eine Deckung von" },
+      { unit: "Pakete", unitSg: "Paket", item: "Hefte", per: "Cent", label: "einen Preis von" },
+      { unit: "Schachteln", unitSg: "Schachtel", item: "Bleistifte", per: "Cent", label: "einen Preis von" },
+    ],
+    // カードの名前として並べるので名詞化（大文字）。
+    colors: ["Rot", "Blau", "Gelb", "Grün", "Lila", "Orange", "Rosa", "Hellblau"],
   },
 };
 
@@ -3318,7 +3411,9 @@ const REVIEW_MAX_PER_SESSION = 3;
 function getReviewQueue() {
   try {
     const parsed = JSON.parse(localStorage.getItem(pk(REVIEW_KEY)) || "{}");
-    return parsed && typeof parsed === "object" ? parsed : {};
+    // ⚠️ 配列も typeof は "object" なので素通りする。配列に文字列キーを生やしても
+    // JSON.stringify が捨てるため、まちがえた記録が黙って消える
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch {
     return {};
   }
@@ -3588,11 +3683,26 @@ function subjectAvailable(subject) {
   return !allowed || allowed.includes(getLocale());
 }
 
+// ⚠️ **意味がほぼ同じ語どうしを、選択肢に同居させない。**
+//    ことわざ・四字熟語は「ほかの語の意味」をランダムに3つ拾って選択肢にするので、
+//    意味が重なる語（一石二鳥と一挙両得など）が混ざると**正解が2つある4択**になる。
+//    実測で約6%の頻度で起きていた（2026-09-25 日次QAで発見）。
+//    `similarTo`（content-ja.js）で組にしてある語は、互いの選択肢から外す。
+//    ⚠️ **語そのものは消していない。**出題はされる。混ざらないだけ。
+function isConfusablePair(x, y) {
+  const near = (p, q) => Array.isArray(p.similarTo) && p.similarTo.includes(q.a);
+  return near(x, y) || near(y, x);
+}
+
+function meaningDistractorPool(bank, idx) {
+  return bank.filter((entry, i) => i !== idx && !isConfusablePair(bank[idx], entry));
+}
+
 // idx は出題する語の位置。呼ぶたびにランダムに選ぶと同じ語が何度も出るため、
 // 出題側が語を1つずつ指定する。まぎらわしい選択肢だけをランダムにする。
 function buildChoiceProblemFromMeaningBank(bank, idx) {
   const { a: word, b: meaning, grade } = bank[idx];
-  const distractors = shuffle(bank.filter((_, i) => i !== idx).map((x) => x.b)).slice(0, 3);
+  const distractors = shuffle(meaningDistractorPool(bank, idx).map((x) => x.b)).slice(0, 3);
   return {
     grade,
     text: t("q.meaning", { word }),
@@ -3609,7 +3719,7 @@ function buildChoiceProblemFromMeaningBank(bank, idx) {
 // 「この意味になることばはどれ？」の逆引き問題
 function buildReverseMeaningProblem(bank, idx) {
   const { a: word, b: meaning, grade } = bank[idx];
-  const distractors = shuffle(bank.filter((_, i) => i !== idx).map((x) => x.a)).slice(0, 3);
+  const distractors = shuffle(meaningDistractorPool(bank, idx).map((x) => x.a)).slice(0, 3);
   return {
     grade,
     text: t("q.meaningReverse", { meaning }),
@@ -3977,8 +4087,20 @@ function toHalfWidth(str) {
     .replace(/\u3000/g, " ");
 }
 
+// ⚠️ **数字以外を「捨てる」のではなく「弾く」。**以前は `[^\d.,-]` をぜんぶ削ってから
+//    parseFloat していたので、`1a8` が `18` になり、**まちがった入力が「せいかい」に
+//    なっていた**（2026-09-21 日次QAで発見。`abc18` `1a8` `18__WRONG` がすべて正解扱い）。
+//    採点はポイント・ずかん・復習キューの卒業判定の土台なので、緩いほうへ間違えない。
+// 単位（`18こ` `18kg`）は受け取る。子どもが数のうしろに単位を足すのは自然なので、
+// **先頭から続く数だけを読み、そのあとに数字が出てこなければ**単位とみなして許す。
 function parseLocaleNumber(str) {
-  let numStr = toHalfWidth(str).replace(/[^\d.,\-]/g, "");
+  const src = toHalfWidth(str).trim();
+  const matched = src.match(/^-?(?:\d[\d,]*(?:\.\d+)?|\.\d+)/);
+  if (!matched) return NaN;
+  // 読み取った数より後ろにまだ数字がある＝数の途中に別の文字が挟まっている（`1a8`）
+  if (/\d/.test(src.slice(matched[0].length))) return NaN;
+
+  let numStr = matched[0];
   numStr = numStr.includes(".") ? numStr.replace(/,/g, "") : numStr.replace(",", ".");
   return parseFloat(numStr);
 }
@@ -4177,7 +4299,16 @@ function openSubjectScreen() {
   english.classList.toggle("is-locked", !enabled);
   english.querySelector(".level-desc").textContent =
     enabled ? t("subject.englishDesc") : t("subject.englishLocked");
-  setGuide("subject");
+
+  // 吹き出しは**いま画面に出ていて、押せる科目だけ**を読み上げる。
+  // ⚠️ 科目の顔ぶれはロケールと学年で変わる（国語は日本語版だけ、英語は3年から）。
+  //    以前は文言に科目名が焼き込まれていて、ドイツ語版では画面に無い「Deutsch」を
+  //    すすめ、日本語版では3科目あるのに英語だけ名前が出なかった。
+  const shown = [...document.querySelectorAll(".level-card[data-subject]")]
+    .filter((btn) => !btn.classList.contains("hidden") && !btn.disabled)
+    .map((btn) => t(`subject.${btn.dataset.subject}`));
+  const moodKey = { 2: "subjectTwo", 3: "subjectThree" }[shown.length] || "subject";
+  setGuide(moodKey, { a: shown[0], b: shown[1], c: shown[2] }, "subject");
   showScreen("screen-subject");
 }
 
@@ -4369,6 +4500,10 @@ function openSettingsScreen() {
   renderReviewNotifySetting();
 
   refreshProfileSettingLine();
+  // アカウント欄は、ログインしたその瞬間にしか書いていなかった。画面を開いたときにも
+  // 描き直しておく（開いた画面が自分の中身を用意する、という形に揃える。
+  // 2026-09-23、おためしモード廃止のあとに設定のアカウント欄が空で出るのを検査が検出）
+  refreshAuthAccountLine();
 
   setGuide("settings");
   showScreen("screen-settings");
@@ -4940,10 +5075,22 @@ function renderReviewNotifySetting() {
 
 // ===== プロフィール画面 =====
 // state.profileMode が "manage" のときは、選ぶかわりに消す操作になる
-function openProfileSelectScreen(mode) {
+// fromSettings: せってい画面から来たかどうか。**起動時の「だれが あそぶ？」では false**
+// （まだ入る前なので、戻る先が無い）。省略したときは、いまの値を引き継ぐ
+// （削除・改名のあとに同じモードで開き直すときに、いちいち渡さなくてよいように）。
+// 「＋」が押せないときのラベル。⚠️ **プランを見ること。**プレミアムで6人まで作った家庭に
+// 「ふやせるのは プレミアムプラン」と出していた（2026-09-24 日次QAで発見）。
+// すでに払っている人に払えと言う表示になっていた。
+function lockedAddLabel() {
+  return isPaidPlan() ? t("profile.addFull", { n: PROFILE_MAX }) : t("profile.addLocked");
+}
+
+function openProfileSelectScreen(mode, fromSettings) {
   state.profileMode = ["manage", "rename"].includes(mode) ? mode : "select";
+  if (fromSettings !== undefined) state.profileSelectFromSettings = !!fromSettings;
   const list = document.getElementById("profile-list");
   const profiles = getProfiles();
+  const canAddProfile = profiles.length < profileLimit();
 
   list.innerHTML = profiles.map((p) => `
     <button type="button" class="profile-card" data-profile-id="${p.id}">
@@ -4951,17 +5098,23 @@ function openProfileSelectScreen(mode) {
       ${state.profileMode === "manage" ? `<span class="profile-card-delete">${t("profile.deleteBtn")}</span>` : ""}
       ${state.profileMode === "rename" ? `<span class="profile-card-rename">${t("profile.renameBtn")}</span>` : ""}
     </button>
-  `).join("") + (state.profileMode === "select" && profiles.length < profileLimit() ? `
-    <button type="button" class="profile-card profile-card--new" id="btn-profile-new">
-      <span class="profile-card-plus">＋</span>
-      <span class="profile-card-name">${t("profile.createNew")}</span>
+  `).join("") + (state.profileMode === "select" ? `
+    <button type="button" class="profile-card profile-card--new${canAddProfile ? "" : " profile-card--locked"}"
+            id="btn-profile-new"${canAddProfile ? "" : " disabled aria-disabled=\"true\""}>
+      <span class="profile-card-plus">${canAddProfile ? "＋" : "🔒"}</span>
+      <span class="profile-card-name">${canAddProfile ? t("profile.createNew") : lockedAddLabel()}</span>
     </button>
   ` : "");
 
-  // 上限に達しているときは「＋」を出さず、なぜ増やせないかを書く
+  // ⚠️ **上限でも「＋」を消さない**（2026-09-24 ユーザー決定）。消してしまうと
+  //    「増やせる機能そのものが無い」ように見える。薄く鍵つきで置いて、
+  //    なぜ押せないかを下に書く。
   const limitNote = document.getElementById("profile-limit-note");
-  const atLimit = state.profileMode === "select" && profiles.length >= profileLimit();
-  limitNote.textContent = atLimit && !isPaidPlan() ? t("profile.freeLimit", { n: PROFILE_MAX }) : "";
+  limitNote.textContent = canAddProfile
+    ? ""
+    : isPaidPlan()
+      ? t("profile.full", { n: PROFILE_MAX })
+      : t("profile.freeLimit", { n: PROFILE_MAX });
   limitNote.classList.toggle("hidden", !limitNote.textContent);
 
   // なまえはユーザー入力なので、HTMLに混ぜずtextContentで入れる
@@ -4990,6 +5143,19 @@ function openProfileSelectScreen(mode) {
     });
   }
 
+  // 見出しは、いま何をする画面かに合わせる。どのモードでも「だれが あそぶ？」のままだと、
+  // カードの小さなラベルしか手がかりが無かった（2026-09-24 日次QAで発見）
+  const screen = document.getElementById("screen-profile-select");
+  const titleKey = { manage: "profile.manageTitle", rename: "profile.renameListTitle" };
+  const subKey = { manage: "profile.manageSub", rename: "profile.renameListSub" };
+  screen.querySelector("h2").textContent = t(titleKey[state.profileMode] || "profile.selectTitle");
+  screen.querySelector(".sub").textContent = t(subKey[state.profileMode] || "profile.selectSub");
+
+  // 「けす」はここから戻れないと、押せるのが削除だけになる
+  document
+    .getElementById("btn-profile-select-back")
+    .classList.toggle("hidden", !state.profileSelectFromSettings);
+
   showScreen("screen-profile-select");
 }
 
@@ -5005,11 +5171,51 @@ function requestProfileDelete(profile) {
   }
 }
 
+// アカウントを新しく作った直後かどうか。ここでだけ学年を聞く（ユーザー決定 2026-09-27）。
+// ⚠️ 2人目以降のプロフィール作成では聞かない。画面をまたぐのでモジュール変数ではなく
+//    localStorage に置く（登録直後にリロードが挟まっても消えないように）。
+const SIGNUP_ASK_GRADE_KEY = "signup_ask_grade";
+
+function markSignupNeedsGrade() {
+  try { localStorage.setItem(SIGNUP_ASK_GRADE_KEY, "1"); } catch {}
+}
+function signupNeedsGrade() {
+  try { return localStorage.getItem(SIGNUP_ASK_GRADE_KEY) === "1"; } catch { return false; }
+}
+function clearSignupNeedsGrade() {
+  try { localStorage.removeItem(SIGNUP_ASK_GRADE_KEY); } catch {}
+}
+
+// 学年えらび（新規登録のときだけ出す）。既定は DEFAULT_GRADE を選んだ状態にしておき、
+// 何も触らずに進んでも、これまでと同じ学年で始まるようにする。
+function renderProfileGradeChoices() {
+  const box = document.getElementById("profile-create-grade");
+  const asking = signupNeedsGrade() && !state.profileRenameId;
+  box.classList.toggle("hidden", !asking);
+  if (!asking) return;
+  state.newProfileGrade = state.newProfileGrade || DEFAULT_GRADE;
+  const list = document.getElementById("profile-grade-choices");
+  list.innerHTML = GRADES.map((g) => `
+    <button type="button" class="grade-choice${g === state.newProfileGrade ? " active" : ""}" data-grade="${g}">
+      ${gradeLabel(g)}
+    </button>
+  `).join("");
+  list.querySelectorAll(".grade-choice").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      playClickSound();
+      state.newProfileGrade = parseInt(btn.dataset.grade, 10);
+      renderProfileGradeChoices();
+    });
+  });
+}
+
 function openProfileCreateScreen() {
   state.profileRenameId = null;
+  document.getElementById("btn-profile-create-ok").disabled = false;
   document.getElementById("profile-name-input").value = "";
   document.getElementById("profile-create-feedback").textContent = "";
   applyProfileFormLabels();
+  renderProfileGradeChoices();
 
   // プロフィールが1つも無いとき（初回起動）は戻る先がないので隠す
   document.getElementById("btn-profile-create-cancel").classList.toggle("hidden", getProfiles().length === 0);
@@ -5020,9 +5226,11 @@ function openProfileCreateScreen() {
 // 見出しとボタンの文言だけを差し替える。
 function openProfileRenameScreen(profile) {
   state.profileRenameId = profile.id;
+  document.getElementById("btn-profile-create-ok").disabled = false;
   document.getElementById("profile-name-input").value = profile.name;
   document.getElementById("profile-create-feedback").textContent = "";
   applyProfileFormLabels();
+  renderProfileGradeChoices();
   document.getElementById("btn-profile-create-cancel").classList.remove("hidden");
   showScreen("screen-profile-create");
   document.getElementById("profile-name-input").focus();
@@ -5037,11 +5245,22 @@ function applyProfileFormLabels() {
 }
 
 document.getElementById("btn-profile-create-ok").addEventListener("click", () => {
+  // ⚠️ **押したらすぐ止める。**素早く2回押すと、同じ名前のプロフィールが2つできていた
+  //    （2026-09-24 日次QAで発見。プレミアムのように枠に余裕があるときに踏む）。
+  //    「つぎへ」で 2026-09-19 に直したのと同じ穴が、この画面に残っていた。
+  //    ⚠️ **やり直せる終わり方（名前が空・上限・保存できない）では必ず戻すこと。**
+  //    戻し忘れると、二度と押せないボタンになる。
+  const okBtn = document.getElementById("btn-profile-create-ok");
+  if (okBtn.disabled) return;
+  okBtn.disabled = true;
+  const giveBack = () => { okBtn.disabled = false; };
+
   playClickSound();
   const name = document.getElementById("profile-name-input").value.trim();
   if (!name) {
     document.getElementById("profile-create-feedback").textContent = t("profile.nameRequired");
     document.getElementById("profile-create-feedback").className = "backup-feedback error";
+    giveBack();
     return;
   }
   // なまえの変更のとき。id は変えないので、学習データはそのまま残る
@@ -5051,6 +5270,7 @@ document.getElementById("btn-profile-create-ok").addEventListener("click", () =>
     applyProfileFormLabels();
     refreshProfileSettingLine();
     openProfileSelectScreen("rename");
+    giveBack();
     return;
   }
 
@@ -5058,6 +5278,7 @@ document.getElementById("btn-profile-create-ok").addEventListener("click", () =>
   if (profile === "storage-blocked") {
     document.getElementById("profile-create-feedback").textContent = t("auth.storageBlocked");
     document.getElementById("profile-create-feedback").className = "backup-feedback error";
+    giveBack();
     return;
   }
   if (!profile) {
@@ -5065,9 +5286,15 @@ document.getElementById("btn-profile-create-ok").addEventListener("click", () =>
       ? t("profile.full", { n: PROFILE_MAX })
       : t("profile.freeLimit", { n: PROFILE_MAX });
     document.getElementById("profile-create-feedback").className = "backup-feedback error";
+    giveBack();
     return;
   }
   setActiveProfileId(profile.id);
+  // ⚠️ setGrade はプロフィールごとの領域に書くので、**setActiveProfileId のあと**に呼ぶ。
+  //    先に呼ぶと、ひとつ前のプロフィールの学年を書き換えてしまう。
+  if (signupNeedsGrade() && state.newProfileGrade) setGrade(state.newProfileGrade);
+  clearSignupNeedsGrade();
+  state.newProfileGrade = null;
   enterAppWithActiveProfile();
 });
 
@@ -5089,9 +5316,14 @@ function submitOnEnter(inputIds, btnId) {
 }
 submitOnEnter(["profile-name-input"], "btn-profile-create-ok");
 
+document.getElementById("btn-profile-select-back").addEventListener("click", () => {
+  playClickSound();
+  openSettingsScreen();
+});
+
 document.getElementById("btn-profile-switch").addEventListener("click", () => {
   playClickSound();
-  openProfileSelectScreen("select");
+  openProfileSelectScreen("select", true);
 });
 
 document.getElementById("btn-resume-session").addEventListener("click", () => {
@@ -5110,12 +5342,12 @@ document.getElementById("btn-discard-session").addEventListener("click", () => {
 
 document.getElementById("btn-profile-rename").addEventListener("click", () => {
   playClickSound();
-  openProfileSelectScreen("rename");
+  openProfileSelectScreen("rename", true);
 });
 
 document.getElementById("btn-profile-manage").addEventListener("click", () => {
   playClickSound();
-  openProfileSelectScreen("manage");
+  openProfileSelectScreen("manage", true);
 });
 
 // プロフィールが決まった状態でアプリ本体に入る。
@@ -5634,7 +5866,22 @@ function renderCharacterBox() {
   }
 }
 
-document.getElementById("btn-begin").addEventListener("click", startSession);
+// ⚠️ **とちゅうのセッションがあるときは、黙って上書きしない。**
+//    ホームに「とちゅうの算数があるよ（4／10もんめ）」と出しておきながら、
+//    別の分野を始めた瞬間に無言で消えていた（2026-09-27 日次QAで発見）。
+//    実害は小さい（完走までポイントは入らない）が、一度見せたものが黙って消えるのは不親切。
+document.getElementById("btn-begin").addEventListener("click", () => {
+  const saved = getActiveSession();
+  if (saved) {
+    const ok = window.confirm(t("resume.overwriteConfirm", {
+      subject: t(`subject.${saved.subject}`),
+      current: saved.index + 1,
+      total: saved.problems.length,
+    }));
+    if (!ok) return;
+  }
+  startSession();
+});
 document.getElementById("btn-back-home-1").addEventListener("click", () => {
   openCategoryScreen();
 });
@@ -6079,15 +6326,15 @@ function startInitialScreen() {
     openProfileCreateScreen();
     return;
   }
-  if (profiles.length === 1) {
-    setActiveProfileId(profiles[0].id);
-    enterAppWithActiveProfile();
-    return;
-  }
+  // ⚠️ **1人でも選択画面を出す**（2026-09-24 ユーザー決定。Netflix のイメージ）。
+  //    以前は1人なら素通りしてホームへ入れていたが、それだと
+  //    「いま誰として遊んでいるか」が画面に出ないまま始まり、
+  //    2人目を足す入口も（せっていの奥にしか）見えなかった。
   if (!getProfiles().some((p) => p.id === getActiveProfileId())) {
     localStorage.removeItem(ACTIVE_PROFILE_KEY);
   }
-  openProfileSelectScreen("select");
+  // 起動時の「だれが あそぶ？」。まだアプリに入っていないので戻る先が無い
+  openProfileSelectScreen("select", false);
 }
 // startInitialScreen() はここでは直接呼ばない。
 // Firebase の onAuthStateChanged（下の Firebase セクション）がログイン状態を確認してから呼ぶ。
@@ -6140,6 +6387,18 @@ function applySeenHistory(profileId, seenHistory) {
       localStorage.setItem(prefix + subKey, JSON.stringify(texts));
     }
   });
+}
+
+// 同期で降ってきた値を「数」として受け付けてよいか。
+// ⚠️ Number(null) === 0、Number([]) === 0 なので、素の Number() では弾けない。
+// 弾き忘れると、壊れたドキュメントが降ってきたときに子どものポイントを0で上書きしてしまう。
+function isNonNegativeNumberLike(v) {
+  if (typeof v === "number") return Number.isFinite(v) && v >= 0;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0;
+  }
+  return false;
 }
 
 // ------- プッシュ -------
@@ -6246,7 +6505,12 @@ async function pullProfileFromFirestore(profileId) {
   localStorage.setItem(pre(GACHA_KEY), JSON.stringify(mergedOwned));
 
   // 以下は last-write-wins（サーバが新しいので上書き）
-  if (server.stampsTotal !== undefined) localStorage.setItem(pre(STORAGE_KEY), String(server.stampsTotal));
+  // ⚠️ サーバの値をそのまま String() して入れないこと。null・文字列・オブジェクトが
+  // 入っていると "null" / "[object Object]" が書かれ、以後 parseInt が NaN を返し続ける。
+  // grade・schoolYearStart は前から妥当性を見ていたのに、ポイントと天井だけ素通しだった。
+  if (isNonNegativeNumberLike(server.stampsTotal)) {
+    localStorage.setItem(pre(STORAGE_KEY), String(Math.floor(Number(server.stampsTotal))));
+  }
   if (server.grade !== undefined && GRADES.includes(Number(server.grade))) {
     localStorage.setItem(pre(GRADE_KEY), String(server.grade));
   }
@@ -6254,11 +6518,13 @@ async function pullProfileFromFirestore(profileId) {
     const m = Number(server.schoolYearStart);
     if (m >= 1 && m <= 12) localStorage.setItem(pre(SCHOOL_YEAR_START_KEY), String(m));
   }
-  if (server.pity !== undefined) localStorage.setItem(pre(PITY_KEY), String(server.pity));
-  if (server.dailyPoints && typeof server.dailyPoints === "object") {
+  if (isNonNegativeNumberLike(server.pity)) {
+    localStorage.setItem(pre(PITY_KEY), String(Math.floor(Number(server.pity))));
+  }
+  if (server.dailyPoints && typeof server.dailyPoints === "object" && !Array.isArray(server.dailyPoints)) {
     localStorage.setItem(pre(DAILY_POINTS_KEY), JSON.stringify(server.dailyPoints));
   }
-  if (server.reviewQueue && typeof server.reviewQueue === "object") {
+  if (server.reviewQueue && typeof server.reviewQueue === "object" && !Array.isArray(server.reviewQueue)) {
     localStorage.setItem(pre(REVIEW_KEY), JSON.stringify(server.reviewQueue));
   }
   if (server.seenHistory) applySeenHistory(profileId, server.seenHistory);
@@ -6367,6 +6633,18 @@ function openLoginScreen() {
   showScreen("screen-login");
 }
 
+// この端末をいちど使ったことがあるか。
+// ⚠️ **プロフィールの有無だけでは足りない。**全部消したあとや、別端末で作った
+//    アカウントに入り直す場合もあるので、ログインまで到達した記録も見る。
+function hasUsedAppBefore() {
+  try {
+    if (localStorage.getItem(AUTH_SEEN_KEY) === "1") return true;
+  } catch {
+    /* 読めない端末では「初めて」として扱う（新規登録を出すほうが自然） */
+  }
+  return getProfiles().length > 0;
+}
+
 function openSignupScreen() {
   document.getElementById("signup-email-input").value = "";
   document.getElementById("signup-password-input").value = "";
@@ -6448,6 +6726,8 @@ document.getElementById("btn-signup-submit").addEventListener("click", async () 
   document.getElementById("btn-signup-submit").disabled = true;
   try {
     const cred = await fbAuth.createUserWithEmailAndPassword(email, password);
+    // このあとのプロフィール作成でだけ学年を聞く
+    markSignupNeedsGrade();
     // 確認メールを送る。届かなくてもアプリは使えるようにする（ここで止めると
     // 登録直後に何もできなくなり離脱する）。未確認であることはせっていに出す。
     try {
@@ -6550,9 +6830,19 @@ fbAuth.onAuthStateChanged(async (user) => {
     stopWatchingHouseholdPlan();
     fbPlan = "free";
     fbNotifyReview = false;
-    openLoginScreen();
+    // ⚠️ **初めての端末には新規登録を出す**（2026-09-24 ユーザー決定）。
+    //    おためしモードを廃止して登録が必須になったので、**アプリを開く新規の人は
+    //    ほぼ全員が未登録**。それなのに常にログイン画面から始めると、全員が
+    //    「アカウントをお持ちの前提」の画面に着き、小さなリンクを探して移ることになる。
+    //    一度でも使った端末（プロフィールがある／ログインまで行った記録がある）は、
+    //    ログアウト後などにまた入るところなので、いままでどおりログイン画面。
+    if (hasUsedAppBefore()) openLoginScreen();
+    else openSignupScreen();
     return;
   }
+
+  // この端末は一度ログインまで来た。次に未ログインで開いたときはログイン画面を出す
+  tryLocalSet(AUTH_SEEN_KEY, "1");
 
   try {
     await migrateLocalProfilesToFirestore();
