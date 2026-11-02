@@ -36,6 +36,39 @@
 * { box-sizing: border-box; }
 
 /* ===== 起動時のオープニング ===== */
+/* 保存に失敗したときの案内（script.js の showStorageWarning）。スプラッシュやガチャ演出より上に出す */
+.storage-warning {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #fff4d6;
+  color: #5a3b00;
+  border-bottom: 2px solid #f0b429;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.storage-warning span { flex: 1; }
+.storage-warning-close {
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+/* ダブルタップでの拡大を止める（連打した子が画面を拡大してしまうのを防ぐ）。ピンチでの拡大はそのまま使える。2026-10-16 */
+html { touch-action: manipulation; }
+
 /* キーボードで閉じられるようにフォーカスを受けるので、フォーカスの輪を内側に見せる（2026-10-11） */
 .splash:focus { outline: none; }
 .splash:focus-visible { outline: 4px solid #ffd54f; outline-offset: -8px; }
@@ -259,7 +292,9 @@
 }
 
 /* 年度の開始月：よく使う3つはボタン、それ以外はこのセレクトから選ぶ。
-   .settings-box の2列グリッドに、ボタン3つと並んで4つめのマスとして収まる。 */
+   .settings-box の2列グリッドに、ボタン3つと並んで4つめのマスとして収まる。
+   ⚠️ 同じ行のセレクトの高さに「3月」のボタンだけ引き伸ばされて、白い大きな箱になっていた → ボタンは伸ばさない（2026-10-27 日次QA） */
+#settings-year-start .grade-option { align-self: center; }
 .year-start-other {
   display: flex;
   flex-direction: column;
@@ -357,7 +392,13 @@
   margin-top: 4px;
   font-size: 0.7rem;
   font-weight: 700;
+  line-height: 1.5;
   color: var(--text-muted);
+}
+/* 項目の途中では折らない。ただし見かけの幅が300px以下（大きく拡大したとき）は、
+   1項目が行より長くなってはみ出すので、ふつうに折り返す */
+@media (min-width: 301px) {
+  .review-row-meta-part { white-space: nowrap; }
 }
 
 /* おしらせ（せってい内・保護者向け）。中身は script.js の ANNOUNCEMENTS（静的配列） */
@@ -1506,6 +1547,18 @@ h2 {
 .btn-secondary:hover { color: var(--text); }
 
 .hidden { display: none !important; }
+/* 画面には出さず、読み上げにだけ伝える（#sr-announcer。2026-10-26 日次QA） */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* ===== プロフィール（だれがあそぶ？・作成） ===== */
 .profile-list {
@@ -1871,6 +1924,8 @@ h2 {
   white-space: pre-line;
   color: var(--text);
 }
+/* 選択式で問題を出したときにフォーカスを置く（script.js の focusCurrentProblem）。押せる部品ではないので枠は出さない */
+.problem-text:focus { outline: none; }
 
 .problem-text.long-text {
   font-size: 0.98rem;
@@ -2035,6 +2090,8 @@ h2 {
   margin-top: 20px;
   padding-top: 20px;
   border-top: 1.5px dashed var(--border-soft);
+  /* Lv の丸だけ中央で、見出しと称号が左寄せになっていたのを揃える（2026-10-17） */
+  text-align: center;
 }
 
 .levelup-text {
@@ -3106,8 +3163,10 @@ body.gacha-open .tab-bar { display: none; }
   margin: 10px auto 0;
   border: 1.5px solid rgba(255, 255, 255, 0.9);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.75);
-  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.9);
+  /* 薄い灰色（--text-muted）だと暗い演出の上でコントラスト約2.4:1しかなく、読みにくかった（2026-10-29 日次QA）。
+     背景の白75%では文字の紫と約4.2:1で、基準の4.5:1に届かなかった → 白90%（約5.5:1。2026-10-30） */
+  color: var(--secondary-dark);
   font-family: inherit;
   font-size: 0.76rem;
   font-weight: 800;
@@ -3116,7 +3175,7 @@ body.gacha-open .tab-bar { display: none; }
   box-shadow: var(--shadow-sm);
   transition: transform 0.15s ease, color 0.15s ease;
 }
-.btn-skip-gacha:hover { color: var(--secondary-dark); transform: translateY(-1px); }
+.btn-skip-gacha:hover { color: var(--text); transform: translateY(-1px); }
 .btn-skip-gacha:active { transform: scale(0.95); }
 
 .gacha-insufficient {
@@ -3380,6 +3439,9 @@ body.gacha-open .tab-bar { display: none; }
   color: #ffe9a8;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
   animation: gacha-refund-in 0.4s ease both;
+  /* 2行になるときは行の長さをそろえる。320px の ja で「…もどってき／た！」と
+     1文字だけ次の行に落ちていた（2026-10-24 日次QA）。keep-all は狭い幅ではみ出すので使わない */
+  text-wrap: balance;
 }
 .gacha-refund.is-new { color: #ffd0e4; }
 
@@ -3397,3 +3459,61 @@ body.gacha-open .tab-bar { display: none; }
 
 /* バックアップ読み込みの確認文。「読み込むもの」と「いま消えるもの」を2行に分けて見せる */
 #backup-confirm-text { white-space: pre-line; }
+
+/* ===== とても狭い幅（ブラウザを150%以上に拡大したスマホなど、見かけの幅が300px以下）。2026-10-20 日次QA =====
+   入力欄が数px まで縮んで答えが打てない、タブバーがはみ出して「せってい」が画面の外に出る（保護者画面へ行けない）、
+   ステータスバーの学年が消える、が起きていた。ふつうの幅の見た目は変えない。 */
+@media (max-width: 300px) {
+  /* ⚠️ min-width: 0 は狭い幅だけ。全幅にしていたら、de の 320px で「Album」と「Einstellungen」がくっついた（2026-10-21） */
+  .tab-bar-btn { min-width: 0; }
+  /* 図鑑：カードの最小幅（約84px）×3列で横にはみ出していた（292px 以下。2026-10-21） */
+  .collection-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .collection-grid .creature-slot--card { width: 100%; height: auto; aspect-ratio: 1; }
+  .feedback-rating { flex-wrap: wrap; }
+  /* YouTube のリンクは空白でだけ折り返す設定（10/8）なので、とても狭いと1語がはみ出す。ここでは普通に折り返す */
+  .youtube-link-text { word-break: normal; overflow-wrap: anywhere; }
+  .youtube-link { flex-wrap: wrap; }
+  #answer-form, #flash-form { flex-wrap: wrap; }
+  #answer-input, #flash-input { flex: 1 1 100%; }
+  #answer-form .btn-primary, #flash-form .btn-primary { flex: 1 1 100%; width: 100%; }
+
+  .tab-bar { width: calc(100% - 12px); padding-left: 4px; padding-right: 4px; }
+  .tab-bar-fab { width: 48px; height: 48px; margin: -16px 2px 0; }
+  .tab-bar-fab-icon { font-size: 1.3rem; }
+  .tab-bar-btn { position: relative; padding: 8px 2px; }
+  /* ラベルは見えなくするが、読み上げのための名前としては残す */
+  .tab-bar-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .status-bar { gap: 6px; padding-left: 8px; padding-right: 8px; }
+  .status-bar-avatar { width: 30px; height: 30px; }
+  .status-bar-sound { width: 28px; height: 28px; }
+  .status-bar-points { padding: 6px 9px; gap: 3px; }
+}
+
+/* ===== 「動きを減らす」設定（prefers-reduced-motion）では、揺れ・光・画面の切りかえなどの動きを止める。2026-10-20 =====
+   これまで止めていたのはスプラッシュ・ガイドの待機・ガチャの放射光などの一部だけだった。
+   進行はタイマーで進む作りなので、動きを止めても先へ進める（日次QAで確認済み）。 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* ガチャのオーラは点滅させずに、色だけ見せる（止めると最後の形＝透明になり、SR・UR の予告色が消えていた。2026-10-21） */
+  .phase-aura .gacha-aura,
+  .phase-aura.aura-UR .gacha-aura { animation: none !important; opacity: 0.6; }
+}
+
+/* さらに狭い（240px 以下）ときは、学年と Lv を2段目に回して読めるようにする */
+@media (max-width: 240px) {
+  .status-bar { flex-wrap: wrap; row-gap: 4px; border-radius: 22px; }
+  .status-bar-info { order: 10; flex-basis: 100%; }
+}

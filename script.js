@@ -9,13 +9,62 @@ let _syncDirtyTimer = null;
 //    setItem は例外を投げる。投げたまま外へ出すと、呼び出し元がそこで止まって
 //    「押しても何も起きないボタン」になる（2026-09-19 日次QAで発見）。
 //    **書けたかどうかを返し、呼び出し元が案内を出せるようにする。**
+//    ⚠️ 遊んでいる最中の保存（ポイント・履歴・復習・カード・設定など）はすべてこれを通す。
+//    以前は直接 setItem していたので、保存の空きが無いと最初の「まちがい」で復習の保存が
+//    例外を投げ、「つぎへ」が出ずに進めなくなっていた（2026-10-17 日次QAで発見）。
+//    バックアップの読み込みと同期は、失敗を自分で受け止めて戻す作りなので直接 setItem のまま。
 function tryLocalSet(key, value) {
   try {
     localStorage.setItem(key, value);
     return true;
   } catch {
+    showStorageWarning();
     return false;
   }
+}
+
+// 「動きを減らす」設定のときは、なめらかなスクロールもやめる（2026-10-20）
+function smoothScrollBehavior() {
+  try {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+  } catch {
+    return "smooth";
+  }
+}
+
+// 保存に失敗したことを、画面の上に1回だけ知らせる。黙って飲むと、結果画面では増えたように見えた
+// ポイントが実は保存されていない、などが子どもにも保護者にも見えなかった（2026-10-18 日次QAで発見）。
+let storageWarningShown = false;
+function showStorageWarning() {
+  if (storageWarningShown || typeof document === "undefined" || !document.body) return;
+  storageWarningShown = true;
+  const bar = document.createElement("div");
+  bar.className = "storage-warning";
+  bar.setAttribute("role", "alert");
+  const text = document.createElement("span");
+  text.textContent = typeof t === "function" ? t("storage.saveFailed") : "";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "storage-warning-close";
+  close.textContent = "✕";
+  close.setAttribute("aria-label", typeof t === "function" ? t("common.close") : "close");
+  // 閉じたら、次に保存に失敗したときにまた出す（閉じたあとガチャを押しても無反応に見えていた。2026-10-19）
+  close.addEventListener("click", () => {
+    bar.remove();
+    storageWarningShown = false;
+  });
+  bar.append(text, close);
+  document.body.appendChild(bar);
+}
+
+// 起動時に1回だけ、書けるか・書いた値が読み戻せるかを確かめる。学校配布の端末のように保存が禁止されていると、
+// 以前はプロフィールを作る段（保護者がメール登録を済ませたあと）まで分からなかった（2026-10-18）
+function probeStorageAtStartup() {
+  if (window.__storageBlocked) { showStorageWarning(); return; }
+  const key = "__storage_probe";
+  const ok = tryLocalSet(key, "1") && (() => { try { return localStorage.getItem(key) === "1"; } catch { return false; } })();
+  try { localStorage.removeItem(key); } catch {}
+  if (!ok) showStorageWarning();
 }
 
 // ===== プラン（無料／プレミアム） =====
@@ -246,7 +295,7 @@ function getAnnounceReadIds() {
 function markAnnouncementsRead(ids) {
   const read = getAnnounceReadIds();
   ids.forEach((id) => read.add(id));
-  localStorage.setItem(ANNOUNCE_READ_KEY, JSON.stringify([...read]));
+  tryLocalSet(ANNOUNCE_READ_KEY, JSON.stringify([...read]));
 }
 
 // plan: "paid" の項目は有料会員にしか見せない（account-design.md §10-13）
@@ -399,12 +448,22 @@ function saveProfiles(list) {
   return tryLocalSet(PROFILES_KEY, JSON.stringify(list));
 }
 
+// 「だれが あそぶ？」で選んだ子を保存できなかったときは、メモリの値で遊ぶ。
+// 以前は保存の失敗を黙って飲み、前の子のまま入って、別の子の記録に書きこんでいた（2026-10-18 日次QAで発見）
+let activeProfileIdMemory = null;
+
 function getActiveProfileId() {
+  if (activeProfileIdMemory !== null) return activeProfileIdMemory;
   return localStorage.getItem(ACTIVE_PROFILE_KEY) || "";
 }
 
 function setActiveProfileId(id) {
-  localStorage.setItem(ACTIVE_PROFILE_KEY, id);
+  activeProfileIdMemory = tryLocalSet(ACTIVE_PROFILE_KEY, id) ? null : id;
+}
+
+function clearActiveProfileId() {
+  activeProfileIdMemory = null;
+  localStorage.removeItem(ACTIVE_PROFILE_KEY);
 }
 
 function getActiveProfile() {
@@ -449,7 +508,9 @@ function createProfile(name) {
   const inherited = list
     .map((p) => localStorage.getItem(`${p.id}:${SCHOOL_YEAR_START_KEY}`))
     .find((v) => v !== null && v !== "");
-  if (inherited) localStorage.setItem(`${profile.id}:${SCHOOL_YEAR_START_KEY}`, inherited);
+  // ⚠️ ここも tryLocalSet。直接 setItem だと保存の空きが無いときに例外で止まり、「つくる」ボタンが
+  //    押せないまま戻らなかった（2026-10-18 日次QAで発見）。引き継げなくても作成は続ける
+  if (inherited) tryLocalSet(`${profile.id}:${SCHOOL_YEAR_START_KEY}`, inherited);
 
   list.push(profile);
   // 端末に保存できないときは、作れたふりをしない（次の画面で全部消えるため）
@@ -486,7 +547,7 @@ function deleteProfile(id) {
   doomed.forEach((key) => localStorage.removeItem(key));
 
   saveProfiles(getProfiles().filter((p) => p.id !== id));
-  if (getActiveProfileId() === id) localStorage.removeItem(ACTIVE_PROFILE_KEY);
+  if (getActiveProfileId() === id) clearActiveProfileId();
 }
 
 // プロフィール導入前から使っていた端末では、既存データが接頭辞なしで入っている。
@@ -535,7 +596,7 @@ function getGrade() {
 
 function setGrade(grade) {
   if (!GRADES.includes(grade)) return;
-  localStorage.setItem(pk(GRADE_KEY), String(grade));
+  tryLocalSet(pk(GRADE_KEY), String(grade));
   markSyncDirty();
 }
 
@@ -563,7 +624,7 @@ function getSchoolYearStart() {
 function setSchoolYearStart(month) {
   const m = parseInt(month, 10);
   if (!(m >= 1 && m <= 12)) return;
-  localStorage.setItem(pk(SCHOOL_YEAR_START_KEY), String(m));
+  tryLocalSet(pk(SCHOOL_YEAR_START_KEY), String(m));
   markSyncDirty();
 }
 
@@ -587,18 +648,21 @@ function getTotalStamps() {
   return Number.isFinite(v) && v >= 0 ? v : 0;
 }
 
+// 返すのは「実際に保存されている合計」。保存できなかったときに計算上の数を返すと、
+// 結果画面に「るいけい 108pt」と出て、ホームは 98pt のまま、という食い違いになっていた（2026-10-18）
 function addStamps(count) {
   const total = getTotalStamps() + count;
-  localStorage.setItem(pk(STORAGE_KEY), String(total));
+  tryLocalSet(pk(STORAGE_KEY), String(total));
   markSyncDirty();
-  return total;
+  return getTotalStamps();
 }
 
 const GACHA_PULL_COST = 10;
 
 function spendStamps(count) {
   const total = Math.max(0, getTotalStamps() - count);
-  localStorage.setItem(pk(STORAGE_KEY), String(total));
+  const ok = tryLocalSet(pk(STORAGE_KEY), String(total));
+  if (!ok) return false;
   markSyncDirty();
   return total;
 }
@@ -634,7 +698,7 @@ function recordDailyPoints(count) {
     if (new Date(y, m - 1, d) >= cutoff) trimmed[key] = value;
   });
 
-  localStorage.setItem(pk(DAILY_POINTS_KEY), JSON.stringify(trimmed));
+  tryLocalSet(pk(DAILY_POINTS_KEY), JSON.stringify(trimmed));
   markSyncDirty();
 }
 
@@ -680,7 +744,8 @@ const INTEGER_ONLY = /^-?\d+$/;
 
 function parseFractionInput(str) {
   // 全角スラッシュ・全角数字も受理する（タブレットのかな入力だと全角で入るため）
-  str = toHalfWidth(str).trim().replace(/／/g, "/");
+  // 末尾の「。」「、」も落とす（かな入力のまま「1/2。」と打つと×だった。数値の答えは前から受けている。2026-10-27 日次QA）
+  str = toHalfWidth(str).trim().replace(/[.,]+$/, "").trim().replace(/／/g, "/");
   // 帯分数（「1 4/15」「1と4/15」「1+4/15」）も受理する。4年で習う書き方なので、
   // 仮分数の答え（19/15）に帯分数で答えた子を不正解にしないため。
   // 分数部分が真分数のときだけ帯分数とみなす（「1 19/15」のような書き方は受けない）
@@ -711,11 +776,15 @@ const SOUND_KEY = "sound_enabled";
 let audioCtx = null;
 
 function isSoundEnabled() {
-  return localStorage.getItem(SOUND_KEY) !== "0";
+  try {
+    return localStorage.getItem(SOUND_KEY) !== "0";
+  } catch {
+    return true;
+  }
 }
 
 function setSoundEnabled(enabled) {
-  localStorage.setItem(SOUND_KEY, enabled ? "1" : "0");
+  tryLocalSet(SOUND_KEY, enabled ? "1" : "0");
 }
 
 function getAudioContext() {
@@ -1365,15 +1434,18 @@ const GACHA_KEY = "gacha_owned";
 
 function getOwnedCards() {
   try {
-    return JSON.parse(localStorage.getItem(pk(GACHA_KEY)) || "{}");
+    const parsed = JSON.parse(localStorage.getItem(pk(GACHA_KEY)) || "{}");
+    // 手で書きかえたバックアップで "null" や配列が入ると、ホーム・ずかん・ガチャ・せっていが例外で開かなくなっていた（2026-10-27 日次QA）
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch (e) {
     return {};
   }
 }
 
 function saveOwnedCards(owned) {
-  localStorage.setItem(pk(GACHA_KEY), JSON.stringify(owned));
+  const ok = tryLocalSet(pk(GACHA_KEY), JSON.stringify(owned));
   markSyncDirty();
+  return ok;
 }
 
 // かぞくのずかん用：全プロフィールの所持カードを合算する
@@ -1428,7 +1500,7 @@ function getGachaSeason() {
 }
 
 function setGachaSeason(season) {
-  localStorage.setItem(pk(GACHA_SEASON_KEY), season);
+  tryLocalSet(pk(GACHA_SEASON_KEY), season);
   markSyncDirty();
 }
 
@@ -1440,7 +1512,7 @@ function gachaPool() {
 }
 
 function setPity(n) {
-  localStorage.setItem(pk(PITY_KEY), String(n));
+  tryLocalSet(pk(PITY_KEY), String(n));
   markSyncDirty();
 }
 
@@ -1482,13 +1554,15 @@ function drawGachaCard() {
 
   const isNew = !owned[card.id];
   owned[card.id] = (owned[card.id] || 0) + 1;
-  saveOwnedCards(owned);
+  // カードを保存できなかったら、引かなかったことにする（呼び出し側がポイントを戻す）。
+  // 以前は保存できなくても演出で「NEW!」を見せ、図鑑には入っていなかった（2026-10-18 日次QAで発見）
+  if (!saveOwnedCards(owned)) return { saved: false };
   setPity(isNew ? 0 : getPity() + 1);
 
   const refund = isNew ? 0 : (DUPLICATE_REFUND[card.rarity] || 0);
   if (refund) addStamps(refund);
 
-  return { card, isNew, count: owned[card.id], refund, pityHit };
+  return { saved: true, card, isNew, count: owned[card.id], refund, pityHit };
 }
 
 // ⚠️ **カード画像が読み込めなかったら、CSSで描くカードに差し替える。**
@@ -1706,6 +1780,7 @@ function playGachaRevealSequence(gachaResult, onComplete) {
 
 // オーバーレイを閉じ、引いたカードをガチャ画面側に残す
 function closeGachaOverlay(gachaResult) {
+  markViewChanged();
   const overlay = document.getElementById("gacha-overlay");
   overlay.classList.add("hidden");
   overlay.setAttribute("aria-hidden", "true");
@@ -1728,7 +1803,7 @@ function closeGachaOverlay(gachaResult) {
   // スクロールしないと無効化される（閉じる前はスクロールしても画面に反映されない）。
   const levelupBox = document.getElementById("gacha-levelup-box");
   if (!levelupBox.classList.contains("hidden")) {
-    levelupBox.scrollIntoView({ behavior: "smooth", block: "center" });
+    levelupBox.scrollIntoView({ behavior: smoothScrollBehavior(), block: "center" });
   }
 }
 
@@ -1915,6 +1990,14 @@ function genAdd1() {
     explain = aOnes === 0
       ? t("math.add1.explainTen", { b, sum })
       : t("math.add1.explainSplit", { a, aOnes, b, part: aOnes + b, sum });
+  } else if (b >= 10) {
+    // たす数が10より大きいときは、たす数のほうを「10と いくつ」に分ける。
+    // 「10を つくる」型にすると「3＋10 → 3に 7たして 10。のこりの 3を たして 13」と、
+    // 7 がどこから来たのか分からない遠回りになっていた（2026-10-28 日次QA）
+    const bOnes = b - 10;
+    explain = bOnes === 0
+      ? t("math.add1.explainTen", { b: a, sum })
+      : t("math.add1.explainSplit", { a: b, aOnes: bOnes, b: a, part: bOnes + a, sum });
   } else if (sum > 10) {
     const toTen = 10 - a;
     const rest = b - toTen;
@@ -3209,7 +3292,7 @@ function genCombination6() {
     answer: `${fact}`,
     type: "number",
     hint: t("math.combination6.hint", { n, n1: n - 1 }),
-    explain: t("math.combination6.explain", { terms: Array.from({ length: n }, (_, i) => n - i).join("×"), fact }),
+    explain: t("math.combination6.explain", { n, n1: n - 1, terms: Array.from({ length: n }, (_, i) => n - i).join("×"), fact }),
   };
 }
 
@@ -3504,7 +3587,7 @@ function getRecentTexts(subject, category) {
 
 function recordSeenTexts(subject, category, texts) {
   const merged = getRecentTexts(subject, category).concat(texts);
-  localStorage.setItem(historyKey(subject, category), JSON.stringify(merged.slice(-SEEN_HISTORY_LIMIT)));
+  tryLocalSet(historyKey(subject, category), JSON.stringify(merged.slice(-SEEN_HISTORY_LIMIT)));
   markSyncDirty();
 }
 
@@ -3517,6 +3600,20 @@ const REVIEW_INTERVALS = [1, 3, 7, 20];
 // 1セッションに混ぜる復習の上限。長く空けると期日到来が溜まるので、
 // 上限を置かないと10問すべてが復習で埋まり、新しい問題に触れられなくなる。
 const REVIEW_MAX_PER_SESSION = 3;
+// 選択肢を出してから、タップを受けつけるまでの時間（ミリ秒）。renderProblem() を参照
+const CHOICE_TAP_GUARD_MS = 450;
+
+// 画面や問題が切りかわった時刻。切りかわった直後のタップ（前の画面のボタンを2回押した2回目）が、
+// 新しい画面の同じ位置にあるボタンに当たってしまうのを防ぐために使う（2026-10-16 日次QAで発見：
+// 「けっかを見る」2回押しで結果画面を飛ばして次の10問が始まる、「算数」2回押しで分野えらびを飛ばす、など）。
+// 人の操作（isTrusted）だけを見るので、検証スクリプトの click() は通る。
+let lastViewChangeAt = 0;
+function markViewChanged() {
+  lastViewChangeAt = performance.now();
+}
+function tappedTooSoon(e) {
+  return !!(e && e.isTrusted && performance.now() - lastViewChangeAt < CHOICE_TAP_GUARD_MS);
+}
 
 function getReviewQueue() {
   let queue;
@@ -3525,6 +3622,11 @@ function getReviewQueue() {
     // ⚠️ 配列も typeof は "object" なので素通りする。配列に文字列キーを生やしても
     // JSON.stringify が捨てるため、まちがえた記録が黙って消える
     queue = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    // 中身が問題の記録（オブジェクト）でない項目は捨てる。{"a":1} のような値で、せっていに "undefined" が出ていた（2026-10-27 日次QA）
+    for (const key of Object.keys(queue)) {
+      const item = queue[key];
+      if (!item || typeof item !== "object" || Array.isArray(item)) delete queue[key];
+    }
   } catch {
     return {};
   }
@@ -3564,7 +3666,7 @@ function migrateLegacyAntonymReviews(queue) {
 }
 
 function saveReviewQueue(queue) {
-  localStorage.setItem(pk(REVIEW_KEY), JSON.stringify(queue));
+  tryLocalSet(pk(REVIEW_KEY), JSON.stringify(queue));
   markSyncDirty();
 }
 
@@ -4277,6 +4379,8 @@ function parseLocaleNumber(str) {
   // 日本語版では「1,200」は3けたくぎり（1200）。小数のコンマは使わないので、
   // 3けたごとのくぎりの形にぴったり合うときだけコンマを外す（es/de は小数のコンマなのでそのまま）
   if (getLocale() === "ja" && /^-?\d{1,3}(?:,\d{3})+$/.test(numStr)) return parseFloat(numStr.replace(/,/g, ""));
+  // コンマが2つ以上ある「4,2,5」は数として読まない（最初のコンマだけ小数点にして 4.2 として○になっていた。2026-10-18）
+  if (!numStr.includes(".") && (numStr.match(/,/g) || []).length > 1) return NaN;
   numStr = numStr.includes(".") ? numStr.replace(/,/g, "") : numStr.replace(",", ".");
   return parseFloat(numStr);
 }
@@ -4325,7 +4429,8 @@ function checkAnswer(userInput, problem) {
       .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
       .replace(/[\s　]/g, "")
       // 文の終わりにつけた「。」「．」「、」は無視する（「はな。」が×になっていた。2026-10-09）
-      .replace(/[。．、]+$/, "")
+      // 半角・全角のコンマも同じ（数値の答えは前から受けていて、ここだけ「5,」が×だった。2026-10-28）
+      .replace(/[。．、.，,]+$/, "")
       .toLowerCase();
   const accepted = problem.accept || [problem.answer];
   return accepted.some((a) => normalize(trimmed) === normalize(a));
@@ -4349,6 +4454,9 @@ function updateActiveTab(id) {
   const tab = SCREEN_TO_TAB[id];
   document.querySelectorAll("#tab-bar [data-tab]").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.tab === tab);
+    // 見た目の「いまのタブ」を読み上げにも伝える（2026-10-25 日次QA）
+    if (btn.dataset.tab === tab) btn.setAttribute("aria-current", "page");
+    else btn.removeAttribute("aria-current");
   });
 }
 
@@ -4408,6 +4516,7 @@ function ensureBottomActionVisible(root, maxScroll) {
 const FIT_TO_FOLD_SCREENS = ["screen-start", "screen-result", "screen-category", "screen-gacha", "screen-flash"];
 
 function showScreen(id) {
+  markViewChanged();
   document.querySelectorAll(".screen").forEach((el) => el.classList.remove("active"));
   document.getElementById(id).classList.add("active");
   // 前の画面でスクロールしていた位置が引き継がれ、ステータスバーが画面外に隠れたまま
@@ -4424,6 +4533,8 @@ function showScreen(id) {
   updateActiveTab(id);
   if (!chromeHidden) updateStatusBar();
   updateBgmForScreen(id);
+  // 「もどる」などで refreshHome() を通らずにホームへ戻る道があるので、ここでも日付を見る
+  if (id === "screen-home" && homeDayKey && homeDayKey !== dayKey(new Date())) refreshHome({ keepGuide: true });
 
   if (FIT_TO_FOLD_SCREENS.includes(id)) {
     requestAnimationFrame(() => ensureBottomActionVisible(document.getElementById(id)));
@@ -4431,8 +4542,15 @@ function showScreen(id) {
 }
 
 // ===== ホーム画面 =====
+// ホーム・せっていに出している「きょう」の日付。開いたまま日をまたいだら描き直すのに使う（refreshIfDayChanged）。
+// ⚠️ 画面ごとに分けて持つ。1つにまとめていたら、ずかんを開いたまま日をまたいだとき
+//    1分ごとの確認が「今日」に進めてしまい、戻ったホームが前の日のまま固まった（2026-11-01 日次QA）
+let homeDayKey = null;
+let settingsDayKey = null;
+
 function refreshHeroDate() {
   const now = new Date();
+  homeDayKey = dayKey(now);
   document.getElementById("hero-date").textContent = t("home.heroDate", {
     month: now.getMonth() + 1,
     day: now.getDate(),
@@ -4522,6 +4640,13 @@ document.getElementById("btn-gacha-home").addEventListener("click", () => {
 
 // ===== ガチャ画面 =====
 function openGachaScreen() {
+  // すでにガチャ画面にいるとき（タブバーのガチャを押した）は、引いたカードの表示を消さない。
+  // 「とじる」の2回押しの2回目がタブバーのガチャに当たり、引いたカードが消えていた（2026-10-16 日次QA）
+  if (document.getElementById("screen-gacha").classList.contains("active")) {
+    renderGachaSeasons();
+    refreshGachaPointsDisplay();
+    return;
+  }
   document.getElementById("gacha-screen-title").textContent = t("gacha.title");
   document.getElementById("gacha-reveal-box").classList.add("hidden");
   document.getElementById("gacha-card-slot").innerHTML = "";
@@ -4612,11 +4737,20 @@ document.getElementById("btn-pull-gacha").addEventListener("click", (e) => {
     return;
   }
   document.getElementById("gacha-insufficient-msg").classList.add("hidden");
-  spendStamps(GACHA_PULL_COST);
-  refreshGachaPointsDisplay();
-
+  // ⚠️ 保存できないときは引かない。ポイントだけ減ってカードが入らない／ポイントが減らずに
+  //    カードだけ増える、という食い違いを防ぐ（2026-10-18 日次QAで発見）
   const compendiumBefore = getCompendiumInfo();
+  if (spendStamps(GACHA_PULL_COST) === false) {
+    refreshGachaPointsDisplay();
+    return;
+  }
   const gachaResult = drawGachaCard();
+  if (!gachaResult.saved) {
+    addStamps(GACHA_PULL_COST);
+    refreshGachaPointsDisplay();
+    return;
+  }
+  refreshGachaPointsDisplay();
   lastGachaResult = gachaResult;
   document.getElementById("gacha-levelup-box").classList.add("hidden");
 
@@ -4696,7 +4830,7 @@ function openSettingsScreen() {
   const list = document.getElementById("settings-grade-list");
   const current = getGrade();
   list.innerHTML = GRADES.map((g) => `
-    <button type="button" class="grade-option${g === current ? " active" : ""}" data-grade="${g}">
+    <button type="button" class="grade-option${g === current ? " active" : ""}" data-grade="${g}" aria-pressed="${g === current}">
       ${gradeLabel(g)}
       <span class="grade-option-range">${g === 1 ? t("settings.gradeRange1") : t("settings.gradeRange", { lo: gradeFloor(g), n: g })}</span>
     </button>
@@ -4705,9 +4839,12 @@ function openSettingsScreen() {
   list.querySelectorAll(".grade-option").forEach((btn) => {
     btn.addEventListener("click", () => {
       playClickSound();
-      setGrade(parseInt(btn.dataset.grade, 10));
+      const grade = parseInt(btn.dataset.grade, 10);
+      setGrade(grade);
       openSettingsScreen();
       updateStatusBar();
+      // 作り直したので、押したボタンにフォーカスを戻す（2026-10-26 日次QA）
+      list.querySelector(`[data-grade="${grade}"]`)?.focus({ preventScroll: true });
     });
   });
 
@@ -4750,7 +4887,7 @@ function renderLanguageSetting() {
   const current = getLocale();
 
   box.innerHTML = Object.keys(LOCALES).map((code) => `
-    <button type="button" class="grade-option${code === current ? " active" : ""}" data-locale="${code}" lang="${code}">
+    <button type="button" class="grade-option${code === current ? " active" : ""}" data-locale="${code}" lang="${code}" aria-pressed="${code === current}">
       ${LOCALES[code].label}
     </button>
   `).join("");
@@ -4932,6 +5069,7 @@ function renderTodayQuestionSetting() {
 function renderReviewSetting() {
   const box = document.getElementById("settings-review-list");
   if (!box) return;
+  settingsDayKey = dayKey(new Date());
   box.innerHTML = "";
 
   const queue = getReviewQueue();
@@ -4949,7 +5087,9 @@ function renderReviewSetting() {
 
   const summary = document.createElement("p");
   summary.className = "review-summary";
-  summary.textContent = t("review.summary", { n: items.length, due: dueCount });
+  // 「きょう出るぶん 23件」と出していたが、1回の10問に出る復習は REVIEW_MAX_PER_SESSION 問まで。
+  // 期日が来ている数と、実際に出る数は別だと分かるように書く（2026-10-13 日次QAで発見）
+  summary.textContent = t("review.summary", { n: items.length, due: dueCount, max: REVIEW_MAX_PER_SESSION });
   box.appendChild(summary);
 
   // 教科ごとにまとめる。混ざったまま縦一列に流すと、たまったときに延々と
@@ -4979,6 +5119,7 @@ function renderReviewSetting() {
 
     const details = document.createElement("details");
     details.className = "review-group";
+    details.dataset.subject = group.subject;
     details.open = openAll || group === openOne;
 
     const summaryEl = document.createElement("summary");
@@ -5018,7 +5159,17 @@ function renderReviewSetting() {
         t("review.stage", { current: (item.stage || 0) + 1, total: REVIEW_INTERVALS.length }),
         t(wrong === 1 ? "review.wrongCountOne" : "review.wrongCount", { n: wrong }),
       ];
-      meta.textContent = parts.join(" ・ ");
+      // 項目ごとに span に分け、狭い幅では「・」の所で折り返す。
+      // 10/13 に「きょう出ます」を「出す日が来ています」と長くしたら、ja の 320px で
+      // 「まちがえた回／数」と項目の途中で折れていた（2026-10-28 日次QA）
+      meta.textContent = "";
+      parts.forEach((part, i) => {
+        if (i > 0) meta.append(" ・ ");
+        const span = document.createElement("span");
+        span.className = "review-row-meta-part";
+        span.textContent = part;
+        meta.append(span);
+      });
       body.appendChild(meta);
       row.appendChild(body);
 
@@ -5092,13 +5243,13 @@ function renderAnnouncements() {
   box.querySelectorAll("[data-scroll-plan]").forEach((btn) => {
     btn.addEventListener("click", () => {
       playClickSound();
-      document.getElementById("settings-plan").scrollIntoView({ behavior: "smooth", block: "start" });
+      document.getElementById("settings-plan").scrollIntoView({ behavior: smoothScrollBehavior(), block: "start" });
     });
   });
   box.querySelectorAll("[data-scroll-review-notify]").forEach((btn) => {
     btn.addEventListener("click", () => {
       playClickSound();
-      document.getElementById("settings-review-notify").scrollIntoView({ behavior: "smooth", block: "start" });
+      document.getElementById("settings-review-notify").scrollIntoView({ behavior: smoothScrollBehavior(), block: "start" });
     });
   });
 
@@ -5315,7 +5466,7 @@ function renderReviewNotifySetting() {
       <button type="button" class="announce-cta" data-scroll-plan="1">${t("plan.title")}</button>`;
     box.querySelector("[data-scroll-plan]").addEventListener("click", () => {
       playClickSound();
-      document.getElementById("settings-plan").scrollIntoView({ behavior: "smooth", block: "start" });
+      document.getElementById("settings-plan").scrollIntoView({ behavior: smoothScrollBehavior(), block: "start" });
     });
     return;
   }
@@ -5462,7 +5613,7 @@ function renderProfileGradeChoices() {
   state.newProfileGrade = state.newProfileGrade || DEFAULT_GRADE;
   const list = document.getElementById("profile-grade-choices");
   list.innerHTML = GRADES.map((g) => `
-    <button type="button" class="grade-choice${g === state.newProfileGrade ? " active" : ""}" data-grade="${g}">
+    <button type="button" class="grade-choice${g === state.newProfileGrade ? " active" : ""}" data-grade="${g}" aria-pressed="${g === state.newProfileGrade}">
       ${gradeLabel(g)}
     </button>
   `).join("");
@@ -5471,6 +5622,8 @@ function renderProfileGradeChoices() {
       playClickSound();
       state.newProfileGrade = parseInt(btn.dataset.grade, 10);
       renderProfileGradeChoices();
+      // 作り直したので、押したボタンにフォーカスを戻す（キー操作・読み上げで位置を失っていた。2026-10-26 日次QA）
+      list.querySelector(`[data-grade="${state.newProfileGrade}"]`)?.focus({ preventScroll: true });
     });
   });
 }
@@ -5831,6 +5984,18 @@ document.getElementById("btn-backup-confirm-no").addEventListener("click", () =>
 document.getElementById("btn-backup-confirm-yes").addEventListener("click", () => {
   playClickSound();
   if (!pendingBackupData) return;
+  // 保存できない端末（index.html の代わりの保存で動いているとき）では読みこまない。
+  // 「読み込みました！」と出たのに、再読み込みで全部消えていた（2026-10-19 日次QA）
+  if (window.__storageBlocked) {
+    const fb = document.getElementById("backup-feedback");
+    if (fb) {
+      fb.textContent = t("auth.storageBlocked");
+      fb.className = "backup-feedback error";
+    }
+    document.getElementById("backup-confirm-box").classList.add("hidden");
+    pendingBackupData = null;
+    return;
+  }
   // ⚠️ **消す前に、いまの中身を控えておく。**以前は clear() のあと1件ずつ書き込み、
   //    途中で失敗（容量オーバーなど）しても戻さなかったので、「しっぱいしました」と
   //    出たときには**いまのデータがもう消えていた**（2026-10-01 日次QAで発見）。
@@ -5892,7 +6057,8 @@ function openCategoryScreen() {
         <div class="category-desc">${cat.desc}</div>
       </div>
     `;
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (e) => {
+      if (tappedTooSoon(e)) return;
       playClickSound();
       state.category = cat.id;
       // たしざんダッシュだけは10問セッションではなく専用のゲームループ
@@ -5960,12 +6126,19 @@ function addFlashPoints(count) {
   const already = getFlashPointsToday();
   const grantable = Math.max(0, Math.min(count, FLASH_DAILY_POINT_CAP - already));
   if (grantable > 0) {
-    addStamps(grantable);
-    recordDailyPoints(grantable);
-    localStorage.setItem(
+    // 先に「きょうの分」を書く。書けないのにポイントだけ足すと、1日10ptの上限が効かなくなっていた（2026-10-18）
+    const counted = tryLocalSet(
       pk(FLASH_POINTS_KEY),
       JSON.stringify({ day: dayKey(new Date()), points: already + grantable })
     );
+    if (!counted) return { granted: 0, capped: false };
+    const before = getTotalStamps();
+    if (addStamps(grantable) <= before) {
+      // ポイントを保存できなかったら、「きょうの分」も元に戻す（上限だけ使われて何ももらえないのを防ぐ）
+      tryLocalSet(pk(FLASH_POINTS_KEY), JSON.stringify({ day: dayKey(new Date()), points: already }));
+      return { granted: 0, capped: false };
+    }
+    recordDailyPoints(grantable);
     markSyncDirty();
   }
   return { granted: grantable, capped: grantable < count };
@@ -5984,7 +6157,7 @@ function saveFlashBest(speedKey, correct) {
   const best = getFlashBest();
   if ((best[speedKey] || 0) >= correct) return false;
   best[speedKey] = correct;
-  localStorage.setItem(pk(FLASH_BEST_KEY), JSON.stringify(best));
+  tryLocalSet(pk(FLASH_BEST_KEY), JSON.stringify(best));
   markSyncDirty();
   return true;
 }
@@ -6104,7 +6277,8 @@ function submitFlashAnswer() {
 
   // 全角の数字（日本語入力のまま打った「２１」）も受ける。Number() だと「0x15」「1e1」まで○になるので、
   // 数字だけの形に限る（2026-10-11 日次QAで発見。通常のクイズは 9/29 に対応ずみ）
-  const digits = toHalfWidth(raw).replace(/\s/g, "");
+  // 末尾の「。」「、」は落とす（「21。」が×だった。通常のクイズと同じ扱い。2026-10-27 日次QA）
+  const digits = toHalfWidth(raw).replace(/\s/g, "").replace(/[.,]+$/, "");
   const correct = /^\d+$/.test(digits) && parseInt(digits, 10) === flashState.sum;
   const feedback = document.getElementById("flash-feedback");
   if (correct) {
@@ -6276,7 +6450,25 @@ document.getElementById("btn-back-home-1").addEventListener("click", () => {
 //    「いま解いていた問題の最初」に戻る。
 // ⚠️ ポイントはセッションの最後にまとめて足すので、とちゅうで閉じたぶんは入らない。
 //    ここで復元しているのは、その「まだ足していないぶん」も含めた途中経過。
+// ⚠️ **途中経過は言語ごとに分けて持つ。**保存しているのは表示用の文字列そのもの
+//    （問題文・ヒント・解説）なので、言語を切りかえて再開すると、スペイン語の画面に
+//    日本語の算数が出た。しかもキーが共通だったので、別の言語で始めた瞬間に
+//    元の言語の途中経過を確認なしで上書きしていた（2026-10-23 日次QA）。
+//    言語なしの古いキーは、その端末で使っていた言語のもの（単一言語の公開版はその言語、
+//    切替できる開発版は日本語）として読み、次に保存・消去するときに片づける。
 const ACTIVE_SESSION_KEY = "active_session";
+
+function activeSessionKey() {
+  return pk(`${ACTIVE_SESSION_KEY}:${getLocale()}`);
+}
+
+function ownsLegacyActiveSession() {
+  return getLocale() === (FORCED_LOCALE || "ja");
+}
+
+function dropLegacyActiveSession() {
+  if (ownsLegacyActiveSession()) localStorage.removeItem(pk(ACTIVE_SESSION_KEY));
+}
 
 function saveActiveSession() {
   if (!state.problems.length) return;
@@ -6290,10 +6482,12 @@ function saveActiveSession() {
     sessionStampsExact: state.sessionStampsExact,
     stampsBeforeSession: state.stampsBeforeSession,
     problems: state.problems,
+    locale: getLocale(),
     savedAt: Date.now(),
   };
   try {
-    localStorage.setItem(pk(ACTIVE_SESSION_KEY), JSON.stringify(snapshot));
+    localStorage.setItem(activeSessionKey(), JSON.stringify(snapshot));
+    dropLegacyActiveSession();
   } catch {
     // 保存できない端末でも、いま解いている問題は続けられるほうが大事なので黙って諦める
   }
@@ -6301,13 +6495,18 @@ function saveActiveSession() {
 
 function getActiveSession() {
   try {
-    const raw = localStorage.getItem(pk(ACTIVE_SESSION_KEY));
+    let raw = localStorage.getItem(activeSessionKey());
+    if (!raw && ownsLegacyActiveSession()) raw = localStorage.getItem(pk(ACTIVE_SESSION_KEY));
     if (!raw) return null;
     const saved = JSON.parse(raw);
     // 学年を変えたあとの古い途中経過は、いまの学年と食い違うので出さない
     if (!saved || !Array.isArray(saved.problems) || !saved.problems.length) return null;
     if (saved.grade !== getGrade()) return null;
     if (saved.index >= saved.problems.length) return null;
+    if (saved.locale && saved.locale !== getLocale()) return null;
+    // 言語を切りかえて、その言語には無い教科（国語は日本語版だけ）の途中経過が残っていたら出さない。
+    // スペイン語の画面に日本語の国語の問題が出て、解けなかった（2026-10-22 日次QA）
+    if (!subjectAvailable(saved.subject)) return null;
     return saved;
   } catch {
     return null;
@@ -6316,7 +6515,8 @@ function getActiveSession() {
 
 function clearActiveSession() {
   try {
-    localStorage.removeItem(pk(ACTIVE_SESSION_KEY));
+    localStorage.removeItem(activeSessionKey());
+    dropLegacyActiveSession();
   } catch {
     /* 消せなくても実害はない（学年や問題数が合わなければ復元しない） */
   }
@@ -6351,6 +6551,7 @@ function resumeActiveSession() {
   state.stampsBeforeSession = getTotalStamps();
   renderProblem();
   showScreen("screen-quiz");
+  focusCurrentProblem();
   return true;
 }
 
@@ -6364,11 +6565,37 @@ function startSession() {
   renderProblem();
   showScreen("screen-quiz");
   // renderProblem() の focus() は画面が出る前なので効かない。1問目だけこたえ欄に入らなかった（2026-10-11）
-  const firstInput = document.getElementById("answer-input");
-  if (firstInput && !firstInput.disabled && firstInput.offsetParent) firstInput.focus();
+  focusCurrentProblem();
+}
+
+// 問題を出したあとのフォーカスの置き場所。入力式はこたえ欄。
+// 選択式は問題文に置く（tabindex="-1"）。何もしないと「つぎへ」が消えたあと body に落ち、
+// キーボードでは Tab を押すと下のタブバーへ出て、選択肢まで7〜12回押す必要があった（2026-10-31 日次QA）。
+// ⚠️ 選択肢のボタンそのものには置かない。「つぎへ」を Enter で押したまま長押しすると、次の問題の選択肢が押されてしまう
+function focusCurrentProblem() {
+  const input = document.getElementById("answer-input");
+  if (input && !input.disabled && input.offsetParent) {
+    input.focus();
+    return;
+  }
+  const text = document.getElementById("problem-text");
+  if (text && text.offsetParent) text.focus({ preventScroll: true });
+}
+
+// 読み上げ用の見えない領域に文を入れる。いったん空にしてから少し遅らせて入れると、
+// 同じ文が続いたときも読まれる。空文字なら消すだけ（次の問題へ進むとき）
+let announceTimer = null;
+function announceToReader(text) {
+  const el = document.getElementById("sr-announcer");
+  if (!el) return;
+  clearTimeout(announceTimer);
+  el.textContent = "";
+  if (!text) return;
+  announceTimer = setTimeout(() => { el.textContent = text; }, 60);
 }
 
 function renderProblem() {
+  markViewChanged();
   // 次の問題への遷移は showScreen() を経由しないので、ここでも同様にリセットする
   // （長文の読解問題でスクロールしたまま次の問題に進むと、ステータスバーが
   // 隠れたままになっていた。2026-08-15 日次QAで発見）。
@@ -6397,6 +6624,7 @@ function renderProblem() {
   document.getElementById("btn-hint").disabled = false;
   document.getElementById("explain-box").classList.add("hidden");
   document.getElementById("explain-box").textContent = "";
+  announceToReader("");
   setSpeakTarget(null);
 
   const form = document.getElementById("answer-form");
@@ -6406,14 +6634,23 @@ function renderProblem() {
     form.classList.add("hidden");
     choiceBox.classList.remove("hidden");
     choiceBox.innerHTML = "";
+    // ⚠️ 選択肢を出した直後のタップは受けない。「スタート」「つぎへ」が次の問題の選択肢と
+    //    同じ位置にあり、2回続けて押すと2回目が選択肢に当たって、選んでいない答えで
+    //    採点されていた（読解・ことわざで再現率ほぼ100%。2026-10-15 日次QAで発見）。
+    //    人の操作（isTrusted）だけを見るので、検証スクリプトの click() はそのまま通る。
+    const shownAt = performance.now();
     p.options.forEach((opt) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "choice-btn";
       btn.textContent = opt;
-      btn.addEventListener("click", () => handleChoiceAnswer(btn, p));
+      btn.addEventListener("click", (e) => {
+        if (e.isTrusted && performance.now() - shownAt < CHOICE_TAP_GUARD_MS) return;
+        handleChoiceAnswer(btn, p);
+      });
       choiceBox.appendChild(btn);
     });
+    focusCurrentProblem();
   } else {
     form.classList.remove("hidden");
     choiceBox.classList.add("hidden");
@@ -6453,7 +6690,8 @@ function applyAnswerResult(isCorrect, feedbackWrongText, problem) {
     const gained = problem && problem.isRepeat && !isReview ? REPEAT_STAMP_RATIO : 1;
     state.sessionStampsExact += gained;
     state.sessionStamps = Math.round(state.sessionStampsExact);
-    feedback.textContent = pick(tList("guide.correct"));
+    const praise = pick(tList("guide.correct"));
+    feedback.textContent = praise;
     feedback.className = "feedback correct";
     if (isReview) {
       feedback.textContent += " " + t("quiz.reviewCleared");
@@ -6471,11 +6709,19 @@ function applyAnswerResult(isCorrect, feedbackWrongText, problem) {
       feedback.textContent += " " + t("quiz.repeatNote");
     }
     setGuide("correct");
+    // 答えの下と吹き出しで、同じほめ言葉が2つ並ばないようにする（2026-10-14 日次QA）
+    const bubble = document.getElementById("guide-bubble");
+    if (bubble.textContent === praise) {
+      const others = tList("guide.correct").filter((line) => line !== praise);
+      if (others.length) bubble.textContent = pick(others);
+    }
   } else {
     playWrongSound();
     feedback.textContent = feedbackWrongText;
     feedback.className = "feedback wrong";
-    setGuide("wrong");
+    // 10問目では「つぎの もんだいで とりかえそう」は言わない（次の問題が無い。2026-10-14 日次QA）
+    const lastProblem = state.index === state.problems.length - 1;
+    setGuide(lastProblem ? "wrongLast" : "wrong", undefined, "wrong");
     // 間違えた問題は、翌日→3日後→7日後→20日後 に もう一度出す。
     // ⚠️ こちらも1回だけ。再開して2回目を答えると、正解なら間違いが帳消しになり、
     //    もう一度間違えると wrongCount が二重に増えていた。
@@ -6489,6 +6735,7 @@ function applyAnswerResult(isCorrect, feedbackWrongText, problem) {
       const explainBox = document.getElementById("explain-box");
       explainBox.textContent = t("quiz.explainPrefix", { text: problem.explain });
       explainBox.classList.remove("hidden");
+      announceToReader(explainBox.textContent);
     }
   }
   document.getElementById("quiz-stamps").textContent = t("quiz.stamps", { n: state.sessionStamps });
@@ -6510,6 +6757,12 @@ document.getElementById("answer-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const input = document.getElementById("answer-input");
   const p = state.problems[state.index];
+  // 何も書かずに「こたえる」を押したときは採点しない。不正解あつかいで復習に入っていた
+  // （2026-10-16 日次QA。たしざんダッシュは前から空欄を無視している）
+  if (input.value.trim() === "") {
+    input.focus();
+    return;
+  }
   const isCorrect = checkAnswer(input.value, p);
 
   input.disabled = true;
@@ -6536,7 +6789,8 @@ document.getElementById("btn-speak-en").addEventListener("click", () => {
   speakEnglish(pendingSpeakText);
 });
 
-document.getElementById("btn-hint").addEventListener("click", () => {
+document.getElementById("btn-hint").addEventListener("click", (e) => {
+  if (tappedTooSoon(e)) return;
   playClickSound();
   const p = state.problems[state.index];
   const hintBox = document.getElementById("hint-box");
@@ -6553,7 +6807,10 @@ document.getElementById("btn-hint").addEventListener("click", () => {
 
   hintBox.textContent = t("quiz.hintPrefix", { text: p.hint || t("quiz.hintFallback") });
   hintBox.classList.remove("hidden");
+  announceToReader(hintBox.textContent);
   document.getElementById("btn-hint").disabled = true;
+  // ヒントのボタンを押すとフォーカスが外れ、スマホのキーボードが閉じていた。入力の問題なら戻す
+  if (p.type !== "choice") document.getElementById("answer-input").focus();
 });
 
 document.getElementById("btn-next").addEventListener("click", () => {
@@ -6638,9 +6895,28 @@ function buildResultSummary(r) {
   };
 }
 
-document.getElementById("btn-share-result").addEventListener("click", shareResult);
+document.getElementById("btn-share-result").addEventListener("click", (e) => {
+  if (tappedTooSoon(e)) return;
+  shareResult();
+});
 
+// 共有シートを開いているあいだの2回目は何もしない。2回目は InvalidStateError で失敗し、
+// 「きょうゆうできませんでした」が一瞬出ていた（2026-10-16 日次QA）
+let shareInFlight = false;
 async function shareResult() {
+  if (shareInFlight) return;
+  shareInFlight = true;
+  // 共有シートが返事をしないまま残っても、二度と押せなくならないよう15秒で解く（2026-10-17）
+  const release = setTimeout(() => { shareInFlight = false; }, 15000);
+  try {
+    await shareResultInner();
+  } finally {
+    clearTimeout(release);
+    shareInFlight = false;
+  }
+}
+
+async function shareResultInner() {
   const feedback = document.getElementById("result-action-feedback");
   const copyBox = document.getElementById("manual-copy-box");
   copyBox.classList.add("hidden");
@@ -6681,7 +6957,10 @@ async function shareResult() {
   document.getElementById("manual-copy-text").select();
 }
 
-document.getElementById("btn-retry").addEventListener("click", startSession);
+document.getElementById("btn-retry").addEventListener("click", (e) => {
+  if (tappedTooSoon(e)) return;
+  startSession();
+});
 
 // ===== 下部タブナビゲーション =====
 document.querySelectorAll("#tab-bar [data-tab]").forEach((btn) => {
@@ -6731,7 +7010,7 @@ function startInitialScreen() {
   //    「いま誰として遊んでいるか」が画面に出ないまま始まり、
   //    2人目を足す入口も（せっていの奥にしか）見えなかった。
   if (!getProfiles().some((p) => p.id === getActiveProfileId())) {
-    localStorage.removeItem(ACTIVE_PROFILE_KEY);
+    clearActiveProfileId();
   }
   // 起動時の「だれが あそぶ？」。まだアプリに入っていないので戻る先が無い
   openProfileSelectScreen("select", false);
@@ -6818,6 +7097,8 @@ setTimeout(() => {
 if (!document.getElementById("splash").classList.contains("is-gone")) {
   document.getElementById("app").inert = true;
 }
+probeStorageAtStartup();
+
 document.getElementById("splash").addEventListener("keydown", (e) => {
   if (e.key !== "Enter" && e.key !== " ") return;
   e.preventDefault();
@@ -6939,7 +7220,35 @@ document.addEventListener("visibilitychange", () => {
     clearTimeout(_syncDirtyTimer);
     pushCurrentProfileToFirestore();
   }
+  if (!document.hidden) refreshIfDayChanged();
 });
+
+// ⚠️ **開いたまま日をまたいだら、日付の入った画面を描き直す。**
+//    タブレットを一晩立てたままにすると、翌朝もホームが「10月31日（土）」・週間グラフの「きょう」が前の日のまま、
+//    せっていの「きょう まちがえた問題です」「出す日が来ているもの」も前の日のままだった
+//    （数字は正しい日に入るが表示だけ古い。2026-10-31 日次QAで発見）。
+//    画面に戻ったとき（visibilitychange）と、つけっぱなしのときのために1分ごとに見る。
+function refreshIfDayChanged() {
+  const today = dayKey(new Date());
+  const current = (document.querySelector(".screen.active") || {}).id;
+  if (current === "screen-home" && homeDayKey && homeDayKey !== today) {
+    refreshHome({ keepGuide: true });
+  } else if (current === "screen-settings" && settingsDayKey && settingsDayKey !== today) {
+    // 開いていた教科のグループとスクロール位置は残す（作り直すと初めの開き方に戻っていた。2026-11-01）
+    const openBySubject = {};
+    document.querySelectorAll("#settings-review-list details[data-subject]").forEach((d) => {
+      openBySubject[d.dataset.subject] = d.open;
+    });
+    const y = window.scrollY;
+    renderTodayQuestionSetting();
+    renderReviewSetting();
+    document.querySelectorAll("#settings-review-list details[data-subject]").forEach((d) => {
+      if (d.dataset.subject in openBySubject) d.open = openBySubject[d.dataset.subject];
+    });
+    window.scrollTo(0, y);
+  }
+}
+setInterval(refreshIfDayChanged, 60000);
 
 // ------- プル -------
 
@@ -7036,6 +7345,11 @@ function watchHouseholdPlan() {
       if (document.getElementById("screen-settings").classList.contains("active")) {
         renderPlanSetting();
         renderReviewNotifySetting();
+      }
+      // ガチャ画面にいるあいだにプランが届いたときも、季節ボタンを新しいプランで描き直す（2026-10-17）
+      if (document.getElementById("screen-gacha").classList.contains("active")) {
+        renderGachaSeasons();
+        refreshGachaPointsDisplay();
       }
       if (becamePaid) showPlanUpgradedNotice();
     }, (e) => {

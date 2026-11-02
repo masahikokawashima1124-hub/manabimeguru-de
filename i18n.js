@@ -76,15 +76,15 @@ const LOCALES = {
     "review.title": "💪 にがて分野",
     "review.desc": "まちがえた問題は、翌日・3日後・7日後・20日後にもう一度出ます。正解できたら次の間かくへ進み、4回とも正解したら卒業してこの一覧から消えます。毎日やらなくても間かくは崩れません。復習しなくてよいものは「×」で削除できます。",
     "review.empty": "いまのところ、復習が必要な問題はありません。",
-    "review.dueToday": "きょう出ます",
+    "review.dueToday": "出す日が来ています",
     // 日本語は単複で形が変わらないので One も同じ文言。スペイン語側で使い分ける
     "review.dueLater": "あと{n}日",
     "review.dueLaterOne": "あと1日",
     "review.wrongCount": "まちがえた回数 {n}回",
     "review.wrongCountOne": "まちがえた回数 1回",
     "review.stage": "{current}/{total}回目",
-    "review.summary": "復習中 {n}件（うち きょう出るぶん {due}件）",
-    "review.group": "{subject} {n}件（きょう出るぶん {due}件）",
+    "review.summary": "復習中 {n}件（うち 出す日が来ているもの {due}件。1回の10問に出る復習は {max}問まで）",
+    "review.group": "{subject} {n}件（うち 出す日が来ているもの {due}件）",
     "resume.text": "とちゅうの {subject}が あるよ（{current}／{total}もんめ）",
     "resume.continue": "つづきから やる",
     "resume.discard": "やめておく",
@@ -186,6 +186,7 @@ const LOCALES = {
     "auth.verifyFailed": "送信に失敗しました。時間をおいてもう一度お試しください",
 
     // --- おためし（未登録で使う） ---
+    "storage.saveFailed": "⚠️ いま、きろく（ポイントやカード）が ほぞんできていません。おうちの人に つたえてね。（端末の空き容量や、ブラウザのサイトデータの設定をご確認ください）",
     "auth.storageBlocked": "この端末では、まなびめぐるのデータを保存できない設定になっているようです。ブラウザのサイトデータの設定（シークレットモードや、サイトデータの保存をブロックする設定）をご確認ください。",
 
     // --- ご要望・お問い合わせ（保護者のアカウントがある場合のみ送信可） ---
@@ -432,7 +433,7 @@ const LOCALES = {
     // --- ガイドのセリフ ---
     "guide.home": [
       "こんにちは！きょうも いっしょに べんきょうしよう！",
-      "どのれべるに ちょうせんする？",
+      "きょうは どの きょうかに ちょうせんする？",
       "まいにち すこしずつ がんばろうね！",
     ],
     // ⚠️ 科目の顔ぶれはロケールと学年で変わる（国語は日本語版だけ、英語は3年から）。
@@ -484,6 +485,11 @@ const LOCALES = {
     "guide.wrong": [
       "おしい！つぎは できるよ！",
       "だいじょうぶ！ つぎの もんだいで とりかえそう！",
+      "ちょっとむずかしかったね。こたえを おぼえておこう！",
+    ],
+    // 10問目をまちがえたとき。「つぎの もんだいで」は言わない（次の問題が無いため。2026-10-14）
+    "guide.wrongLast": [
+      "おしい！つぎは できるよ！",
       "ちょっとむずかしかったね。こたえを おぼえておこう！",
     ],
     "guide.resultPerfect": [
@@ -562,7 +568,7 @@ const LOCALES = {
     "math.placeTens": "十の位",
     "math.placeHundreds": "百の位",
     "math.placeThousands": "千の位",
-    "math.mul3.hint": "{a}を 十の位と一の位に分けて、それぞれ {b}を かけてみよう",
+    "math.mul3.hint": "{a}を 十のくらいと 一のくらいに 分けて、それぞれ {b}を かけてみよう",
     "math.mul3.explain": "{tens}×{b}＝{tensPart}、{ones}×{b}＝{onesPart}。あわせて {tensPart}＋{onesPart}＝{product}",
     "math.div3.hint": "{b}のだんの 九九で こたえが {a} になる数を さがそう",
     "math.div3.explain": "{b} × {q} = {a} だから、{a} ÷ {b} の こたえは {q}",
@@ -604,7 +610,7 @@ const LOCALES = {
     "math.wordSubDiff1.hint": "「ちがい」を きかれたら、大きいほうから 小さいほうを ひこう",
     "math.wordSubDiff1.explain": "{a}－{b}＝{diff}。{nameA}のほうが {diff}{c} おおいよ",
     "math.wordAddSub1.text": "{item}が {a}{c} ありました。{b}{c} もらって、そのあと {c2}{c} {past}。のこりは {howMany}？",
-    "math.wordAddSub1.hint": "はじめの数に もらった数を たして、そのあと {plain}数を ひこう",
+    "math.wordAddSub1.hint": "はじめの かずに もらった かずを たして、そのあと {plain} かずを ひこう",
     "math.wordAddSub1.explain": "{a}＋{b}＝{sum}{c}。そこから {c2}{c} {plain}から {sum}－{c2}＝{rest}{c} のこるよ",
     "math.wordLength2.textAdd": "あおい テープが {a}cm、あかい テープが {b}cm あります。つなげると なんcm？",
     "math.wordLength2.hintAdd": "つなげた長さは、2本の長さを たすと もとめられるよ",
@@ -621,7 +627,7 @@ const LOCALES = {
 
     // --- 算数の生成器（4年） ---
     "math.divLong4.hint": "{a}を「{b}×10の いくつぶん」と「のこり」に 分けて、それぞれ {b}で わってみよう",
-    "math.divLong4.explainExact": "{b}×10＝{b10}。{a}は {b10}の {qT}つぶんなので、{a}÷{b}＝{qTens}",
+    "math.divLong4.explainExact": "{b}×10＝{b10}。{a}は {b10}の {qT}つぶん。{b10}÷{b}＝10 なので、{a}÷{b}は 10の {qT}つぶんで {qTens}",
     "math.divLong4.explainSplit": "{a}を、{b}×10の {qT}つぶんの {tensPart}と、のこりの {onesPart}に分けると、{tensPart}÷{b}＝{qTens}、{onesPart}÷{b}＝{qOnes}。あわせて {q}",
     "math.decimalAddSub4.hint": "100ばいして 整数に してから 計算しよう。さいごに 小数点を もどすよ",
     "math.decimalAddSub4.explainAdd": "{a}を 100ばいすると {aRaw}、{b}を 100ばいすると {bRaw}。{aRaw}＋{bRaw}＝{raw}。100で わって もとに もどすと {answer}",
@@ -677,7 +683,7 @@ const LOCALES = {
     "math.itemSeparator": "・",
     "math.decimalMul5.hint": "小数点が ないものとして かけ算し、あとで 小数点を もどそう",
     "math.decimalMul5.explain": "{a10} × {b} ＝ {raw}。小数点を 1つ もどして {answer}",
-    "math.decimalDiv5.hint": "わられる数の 小数点の いちを そのまま 商に うつして 計算しよう",
+    "math.decimalDiv5.hint": "わられる数を 10ばいして 小数点の ない数に してから わろう。さいごに 10で わって もどすよ",
     "math.decimalDiv5.explain": "{a}を 10ばいすると {a10}。{inner}。10で わって もとに もどすと {q}",
     "math.fractionAddDiff5.text": "{n1}/{d1} ＋ {n2}/{d2} = ？（やくぶんしてね）",
     "math.fractionAddDiff5.hint": "分母を そろえて（通分して）から たしざんしよう",
@@ -746,7 +752,7 @@ const LOCALES = {
     "math.proportion6.explain": "x＝{x1}のとき y＝{y1}だから、決まった数は {y1}÷{x1}＝{k}。x＝{x2}のとき y ＝ {x2} × {k} ＝ {y2}",
     "math.combination6.text": "{items}の {n}まいの カードを 横一列に ならべます。ならべ方は 何通り？",
     "math.combination6.hint": "さいしょの1まいの えらび方は{n}通り、つぎは{n1}通り…と かけ算していこう",
-    "math.combination6.explain": "{terms}＝{fact}通り",
+    "math.combination6.explain": "1まいめの えらび方は{n}通り、2まいめは のこりの{n1}通り…と、1通りずつ へっていく。ぜんぶ かけて {terms}＝{fact}通り",
     "math.wordRatioSplit6.text": "{total}円を {rx}:{ry}の 比で 2人に わけます。おおい方は いくら？",
     "math.wordRatioSplit6.hint": "比の合計にあわせて、全体をいくつ分にわけるか考えよう",
     "math.wordRatioSplit6.explain": "比の合計は {rx}＋{ry}＝{totalUnits}。{total}÷{totalUnits}＝{perUnit}円が1あたり。おおい方は {bigger}×{perUnit}＝{answer}円",
@@ -844,14 +850,14 @@ const LOCALES = {
     "review.title": "💪 Lo que cuesta más",
     "review.desc": "Las preguntas falladas vuelven a salir al día siguiente y a los 3, 7 y 20 días. Cada acierto pasa al siguiente intervalo y, tras acertar las cuatro veces, la pregunta desaparece de esta lista. Los intervalos se respetan aunque no se juegue todos los días. Con la «×» puedes quitar lo que no haga falta repasar.",
     "review.empty": "Ahora mismo no hay nada pendiente de repasar.",
-    "review.dueToday": "Sale hoy",
+    "review.dueToday": "Ya toca",
     "review.dueLater": "En {n} días",
     "review.dueLaterOne": "Mañana",
     "review.wrongCount": "Fallada {n} veces",
     "review.wrongCountOne": "Fallada 1 vez",
     "review.stage": "Repaso {current} de {total}",
-    "review.summary": "{n} en repaso ({due} para hoy)",
-    "review.group": "{subject}: {n} ({due} para hoy)",
+    "review.summary": "{n} en repaso ({due} ya tocan; en cada ronda salen como máximo {max})",
+    "review.group": "{subject}: {n} ({due} ya tocan)",
     "resume.text": "Tienes {subject} a medias (pregunta {current} de {total})",
     "resume.continue": "Seguir",
     "resume.discard": "Descartar",
@@ -953,6 +959,7 @@ const LOCALES = {
     "auth.verifyFailed": "No se pudo enviar. Inténtelo de nuevo más tarde",
 
     // --- おためし（未登録で使う） ---
+    "storage.saveFailed": "⚠️ Ahora mismo no se pueden guardar tus avances (puntos y cartas). Avisa a un adulto. (Revisad el espacio libre del dispositivo o los ajustes de datos del navegador).",
     "auth.storageBlocked": "Parece que este dispositivo no permite guardar los datos de Manabimeguru. Revisa los ajustes del navegador (modo incógnito o bloqueo de datos de sitios).",
 
     "feedback.title": "💬 Opiniones y sugerencias",
@@ -1260,6 +1267,10 @@ const LOCALES = {
       "¡No pasa nada, en la próxima lo recuperas!",
       "Esta era un poco difícil. ¡Quédate con la respuesta!",
     ],
+    "guide.wrongLast": [
+      "¡Casi! ¡La próxima seguro!",
+      "Esta era un poco difícil. ¡Quédate con la respuesta!",
+    ],
     "guide.resultPerfect": [
       "¡Guau! ¡Todas correctas! ¡Perfecto!",
       "¡Puntuación perfecta! ¡Genial!",
@@ -1392,8 +1403,8 @@ const LOCALES = {
     // ⚠️ 末尾にピリオドを付けないこと。この2つは decimalDiv5.explain の {inner} として
     //    差し込まれ、呼び出し側が「. Dividiendo...」と続けるため、二重ピリオドになる。
     //    日本語版も同じ理由で句点を付けていない。
-    "math.divLong4.explainExact": "{b}×10={b10}. {a} es {qT} veces {b10}, así que {a}÷{b}={qTens}",
-    "math.divLong4.explainSplit": "Separa {a} en {tensPart} ({qT} veces {b}×10) y lo que sobra, {onesPart}: {tensPart}÷{b}={qTens} y {onesPart}÷{b}={qOnes}. En total, {q}",
+    "math.divLong4.explainExact": "{b}×10={b10} y {a}={qT}×{b10}. Como {b10}÷{b}=10, {a}÷{b}={qT}×10={qTens}",
+    "math.divLong4.explainSplit": "Separa {a} en {tensPart} (={qT}×{b}×10) y lo que sobra, {onesPart}: {tensPart}÷{b}={qTens} y {onesPart}÷{b}={qOnes}. En total, {q}",
     "math.decimalAddSub4.hint": "Multiplica por 100 para trabajar con números enteros y, al final, vuelve a poner la coma.",
     "math.decimalAddSub4.explainAdd": "{a} por 100 es {aRaw}, y {b} por 100 es {bRaw}. {aRaw}+{bRaw}={raw}. Dividiendo entre 100 vuelves a {answer}.",
     "math.decimalAddSub4.explainSub": "{big} por 100 es {bigRaw}, y {small} por 100 es {smallRaw}. {bigRaw}−{smallRaw}={raw}. Dividiendo entre 100 vuelves a {answer}.",
@@ -1447,7 +1458,7 @@ const LOCALES = {
     "math.itemSeparator": ", ",
     "math.decimalMul5.hint": "Multiplica como si no hubiera coma decimal y al final vuelve a ponerla.",
     "math.decimalMul5.explain": "{a10} × {b} = {raw}. Corriendo la coma decimal un lugar sale {answer}.",
-    "math.decimalDiv5.hint": "La coma decimal del dividendo pasa igual al cociente.",
+    "math.decimalDiv5.hint": "Multiplica el dividendo por 10 para quitar la coma, divide y al final divide entre 10 para volver.",
     "math.decimalDiv5.explain": "{a} por 10 es {a10}. {inner}. Dividiendo entre 10 vuelves a {q}.",
     "math.fractionAddDiff5.text": "{n1}/{d1} + {n2}/{d2} = ? (simplifica el resultado)",
     "math.fractionAddDiff5.hint": "Pon el mismo denominador en las dos fracciones y después suma.",
@@ -1514,7 +1525,7 @@ const LOCALES = {
     "math.proportion6.explain": "Como x={x1} da y={y1}, el número fijo es {y1}÷{x1}={k}. Cuando x={x2}: y = {x2} × {k} = {y2}.",
     "math.combination6.text": "Se colocan en fila {n} tarjetas de estos colores: {items}. ¿De cuántas maneras distintas se pueden ordenar?",
     "math.combination6.hint": "Para la primera hay {n} opciones, para la siguiente {n1}… y se van multiplicando.",
-    "math.combination6.explain": "{terms} = {fact} maneras",
+    "math.combination6.explain": "La primera tarjeta tiene {n} opciones, la segunda {n1} (las que quedan)… y así hasta 1. Multiplicando todo: {terms} = {fact} maneras",
     "math.wordRatioSplit6.text": "Se reparten {total} céntimos entre dos personas en la razón {rx}:{ry}. ¿Cuánto le toca a la que más recibe?",
     "math.wordRatioSplit6.hint": "Suma los términos de la razón y piensa en cuántas partes se divide el total.",
     "math.wordRatioSplit6.explain": "La razón suma {rx}+{ry}={totalUnits}. {total}÷{totalUnits}={perUnit} por parte. La que más recibe se lleva {bigger}×{perUnit}={answer}.",
@@ -1605,15 +1616,15 @@ const LOCALES = {
     "review.title": "💪 Schwachstellen",
     "review.desc": "Falsch beantwortete Fragen kommen am nächsten Tag sowie nach 3, 7 und 20 Tagen erneut. Bei richtiger Antwort geht es zum nächsten Intervall, nach dem vierten richtigen Mal verschwindet die Frage aus dieser Liste. Die Intervalle bleiben erhalten, auch wenn nicht jeden Tag geübt wird. Mit „×“ können Fragen entfernt werden, die nicht wiederholt werden müssen.",
     "review.empty": "Im Moment gibt es nichts zu wiederholen.",
-    "review.dueToday": "Kommt heute",
+    "review.dueToday": "Fällig",
     // 日本語は単複で形が変わらないので One も同じ文言。スペイン語側で使い分ける
     "review.dueLater": "In {n} Tagen",
     "review.dueLaterOne": "Morgen",
     "review.wrongCount": "{n}-mal falsch beantwortet",
     "review.wrongCountOne": "1-mal falsch beantwortet",
     "review.stage": "Wiederholung {current} von {total}",
-    "review.summary": "{n} in Wiederholung (davon {due} heute fällig)",
-    "review.group": "{subject}: {n} (davon {due} heute fällig)",
+    "review.summary": "{n} in Wiederholung (davon {due} fällig; pro Runde kommen höchstens {max} dran)",
+    "review.group": "{subject}: {n} (davon {due} fällig)",
     "resume.text": "Du hast {subject} noch nicht fertig (Frage {current} von {total})",
     "resume.continue": "Weitermachen",
     "resume.discard": "Verwerfen",
@@ -1715,6 +1726,7 @@ const LOCALES = {
     "auth.verifyFailed": "Senden fehlgeschlagen. Bitte versuchen Sie es später erneut",
 
     // --- おためし（未登録で使う） ---
+    "storage.saveFailed": "⚠️ Dein Fortschritt (Punkte und Karten) kann gerade nicht gespeichert werden. Sag bitte einem Erwachsenen Bescheid. (Bitte freien Speicher des Geräts und die Website-Daten-Einstellungen des Browsers prüfen.)",
     "auth.storageBlocked": "Dieses Gerät scheint das Speichern der Daten von Manabimeguru nicht zuzulassen. Bitte prüfen Sie die Browsereinstellungen (privater Modus oder Blockieren von Website-Daten).",
 
     // --- ご要望・お問い合わせ（保護者のアカウントがある場合のみ送信可） ---
@@ -2009,6 +2021,10 @@ const LOCALES = {
       "Kein Problem, bei der nächsten Aufgabe holst du es wieder auf!",
       "Das war etwas schwierig. Merk dir die Antwort gut!",
     ],
+    "guide.wrongLast": [
+      "So knapp! Beim nächsten Mal klappt's!",
+      "Das war etwas schwierig. Merk dir die Antwort gut!",
+    ],
     "guide.resultPerfect": [
       "Wow! Alles richtig! Das war perfekt!",
       "Volle Punktzahl! Super gemacht!",
@@ -2144,7 +2160,7 @@ const LOCALES = {
 
     // --- 算数の生成器（4年） ---
     "math.divLong4.hint": "Zerlege {a} in ein Vielfaches von {b}·10 und den Rest und teile beide Teile durch {b}.",
-    "math.divLong4.explainExact": "{b}·10={b10}. {a} ist {qT}-mal {b10}, also {a}÷{b}={qTens}",
+    "math.divLong4.explainExact": "{b}·10={b10}, und {a} ist {qT}-mal {b10}. Weil {b10}÷{b}=10 ist, gilt {a}÷{b}={qT}·10={qTens}",
     "math.divLong4.explainSplit": "Teile {a} in {tensPart} ({qT}-mal {b}·10) und den Rest {onesPart}: {tensPart}÷{b}={qTens}, {onesPart}÷{b}={qOnes}. Zusammen {q}",
     "math.decimalAddSub4.hint": "Multipliziere mit 100, damit du mit ganzen Zahlen rechnest. Setz das Komma am Ende wieder zurück.",
     "math.decimalAddSub4.explainAdd": "{a} mal 100 ist {aRaw}, {b} mal 100 ist {bRaw}. {aRaw}+{bRaw}={raw}. Geteilt durch 100 ergibt wieder {answer}.",
@@ -2200,7 +2216,7 @@ const LOCALES = {
     "math.itemSeparator": ", ",
     "math.decimalMul5.hint": "Rechne so, als gäbe es kein Komma, und setz es am Ende wieder ein.",
     "math.decimalMul5.explain": "{a10} × {b} = {raw}. Das Komma um eine Stelle zurückgesetzt ergibt {answer}.",
-    "math.decimalDiv5.hint": "Das Komma des Dividenden wird direkt in den Quotienten übernommen.",
+    "math.decimalDiv5.hint": "Nimm den Dividenden mal 10, damit das Komma verschwindet, teile und teile am Ende wieder durch 10.",
     "math.decimalDiv5.explain": "{a} mal 10 ist {a10}. {inner}. Geteilt durch 10 ergibt wieder {q}.",
     "math.fractionAddDiff5.text": "{n1}/{d1} + {n2}/{d2} = ? (kürze das Ergebnis)",
     "math.fractionAddDiff5.hint": "Bring beide Brüche auf denselben Nenner und addiere dann.",
@@ -2269,7 +2285,7 @@ const LOCALES = {
     "math.proportion6.explain": "Da x={x1} und y={y1} ergibt, ist die feste Zahl {y1}÷{x1}={k}. Bei x={x2}: y = {x2} × {k} = {y2}.",
     "math.combination6.text": "{n} Karten dieser Sorten werden in einer Reihe aufgestellt: {items}. Auf wie viele verschiedene Arten lassen sie sich anordnen?",
     "math.combination6.hint": "Für die erste Karte gibt es {n} Möglichkeiten, für die nächste {n1} … und so weiter, alles multiplizieren.",
-    "math.combination6.explain": "{terms} = {fact} Arten",
+    "math.combination6.explain": "Für die erste Karte gibt es {n} Möglichkeiten, für die zweite noch {n1} … bis zur letzten mit 1. Alles multipliziert: {terms} = {fact} Arten",
     "math.wordRatioSplit6.text": "{total} Cent werden zwischen zwei Personen im Verhältnis {rx}:{ry} aufgeteilt. Wie viel bekommt die Person mit dem größeren Anteil?",
     "math.wordRatioSplit6.hint": "Addiere die Teile des Verhältnisses und überlege, in wie viele Teile das Ganze aufgeteilt wird.",
     "math.wordRatioSplit6.explain": "Das Verhältnis ergibt {rx}+{ry}={totalUnits}. {total}÷{totalUnits}={perUnit} Cent pro Teil. Die Person mit dem größeren Anteil bekommt {bigger}×{perUnit}={answer} Cent.",
@@ -2684,7 +2700,7 @@ const CARD_NAMES = {
     "fuyu-r2": "Eiszapfenstab",            // No.084
     "fuyu-sr1": "Raureif-Knirschen",            // No.085
     "fuyu-ur1": "Schneemaler",            // No.086
-    "fuyu-n3": "Schneemann-Kugelchen",             // No.087
+    "fuyu-n3": "Schneemann-Kügelchen",             // No.087
     "fuyu-n4": "Schneeballmeister",                     // No.088
     "fuyu-n5": "Schlittenflitzer",                   // No.089
     "fuyu-r3": "Iglukindchen",                 // No.090
@@ -2809,7 +2825,12 @@ function getLocale() {
 
 function setLocale(locale) {
   if (!LOCALES[locale]) return;
-  localStorage.setItem(LOCALE_KEY, locale);
+  // 保存できなくても止めない（以前は例外で言語ボタンが無反応になった。2026-10-19）。案内は script.js 側で出す
+  try {
+    localStorage.setItem(LOCALE_KEY, locale);
+  } catch {
+    if (typeof showStorageWarning === "function") showStorageWarning();
+  }
   document.documentElement.lang = locale;
   applyTranslations();
 }

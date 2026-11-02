@@ -3,13 +3,34 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+// ⚠️ localStorage にさわるだけで例外になる端末（すべてのサイトデータをブロックする設定など）では、
+//    起動直後の読み込みで script.js が止まり、スプラッシュから先へ進めなかった（2026-10-18 日次QAで発見）。
+//    そのときだけメモリ上の代わりを置いて動かし、記録が残らないことは script.js が案内する。
+(function () {
+  try { window.localStorage.getItem("__probe"); return; } catch (e) {}
+  var mem = {};
+  var shim = {};
+  var def = function (name, fn) { Object.defineProperty(shim, name, { value: fn }); };
+  def("getItem", function (k) { return Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null; });
+  def("setItem", function (k, v) { mem[k] = String(v); });
+  def("removeItem", function (k) { delete mem[k]; });
+  def("clear", function () { mem = {}; });
+  def("key", function (i) { return Object.keys(mem)[i] || null; });
+  Object.defineProperty(shim, "length", { get: function () { return Object.keys(mem).length; } });
+  try {
+    Object.defineProperty(window, "localStorage", { value: shim, configurable: true });
+    window.__storageBlocked = true;
+  } catch (e) {}
+})();
+</script>
 <title>まなびめぐる</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800;900&display=swap" rel="stylesheet">
 <!-- ?v= はキャッシュ対策。style.css / script.js / i18n.js を変更したら数字を上げること -->
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>">
-<link rel="stylesheet" href="style.css?v=63">
+<link rel="stylesheet" href="style.css?v=77">
 </head>
 <body>
 
@@ -375,7 +396,7 @@
     </div>
     <div class="problem-box">
       <div id="problem-badge" class="problem-badge"></div>
-      <div id="problem-text" class="problem-text">?</div>
+      <div id="problem-text" class="problem-text" tabindex="-1">?</div>
 
       <button id="btn-hint" type="button" class="btn-hint" data-i18n="quiz.hint"></button>
       <div id="hint-box" class="hint-box hidden"></div>
@@ -392,6 +413,10 @@
            端末に英語の音声が1つも無いときは出さない（script.js の speakEnAvailable） -->
       <button type="button" id="btn-speak-en" class="btn-speak hidden"></button>
       <div id="explain-box" class="explain-box hidden"></div>
+      <!-- ヒントと「かんがえかた」の読み上げ用。箱そのものは display:none から出すので、
+           箱に role="status" を付けても多くの読み上げで鳴らない（2026-10-26 日次QA）。
+           いつも置いてある見えない領域へ、箱を出したあとで同じ文を入れる（script.js の announceToReader） -->
+      <div id="sr-announcer" class="sr-only" aria-live="polite"></div>
       <button id="btn-next" class="btn-primary hidden" data-i18n="quiz.next"></button>
     </div>
   </section>
@@ -536,9 +561,9 @@
 <script src="vendor/firebase-auth-compat.js"></script>
 <script src="vendor/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js?v=1"></script>
-<script src="i18n.js?v=77"></script>
-<script src="content-ja.js?v=17"></script>
+<script src="i18n.js?v=86"></script>
+<script src="content-ja.js?v=18"></script>
 <script src="content-en.js?v=13"></script>
-<script src="script.js?v=134"></script>
+<script src="script.js?v=150"></script>
 </body>
 </html>
